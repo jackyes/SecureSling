@@ -30,6 +30,14 @@ How it Works
 ## Password protected upload (Optional)
 You can choose to lock the upload section to ensure that no one without permission can share files.   
 
+## Screenshots
+
+| Screenshot |
+| --- |
+| ![Upload](Screenshot/Upload.png) | 
+| ![File_Uploaded](Screenshot/File_Uploaded.png) | 
+| ![File_Downloaded](Screenshot/File_Downloaded.png) | 
+
 ## Note:
 Only a randomly generated identifier that refers to the shared file is sent to the server.  
 The link parameters for the decryption key and original file name are never sent to the server, so no one other than the recipient and the sender can decrypt the file on their device.  
