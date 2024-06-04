@@ -6,7 +6,6 @@ SecureSling makes file sharing simple and straightforward with an intuitive inte
 ## Secure E2E Encryption & zero-knowledge architecture
   
 Files are encrypted with AES-GCM using a 256-bit key to ensure data privacy and security. This state-of-the-art encryption standard provides robust protection for your files.
-One-Time Downloads
   
 ## Flexible File Sharing
 Enable one-time downloads to ensure your files are only accessible once  
@@ -21,8 +20,13 @@ Our server never has access to your unencrypted files, ensuring maximum privacy 
   
 How it Works
 
-    Encryption: Before uploading, your files are encrypted using AES-GCM with a 256-bit key, a state-of-the-art encryption standard.
-    Upload: Only the encrypted version of your files is uploaded to our server.
-    Decryption: When downloading, the encrypted files are decrypted on your device using the decryption key you provided.
+- Encryption:
+  - Before uploading, your files are encrypted using AES-GCM with a 256-bit key, a state-of-the-art encryption standard.
+- Upload:
+  - Only the encrypted version of your files is uploaded to our server. Also filename and metadata are safe thank to the zero-knowledge architecture.
+- Decryption:
+  - When downloading, the encrypted files are decrypted on your device using the decryption key you provided (in the sharing link).
 
-Get Started with SecureSling
+## Note:
+Only a randomly generated identifier that refers to the shared file is sent to the server.  
+The link parameters for the decryption key and original file name are never sent to the server, so no one other than the recipient and the sender can decrypt the file on their device.  
