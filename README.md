@@ -11,6 +11,9 @@ Files are encrypted with AES-GCM using a 256-bit key to ensure data privacy and 
 Enable one-time downloads to ensure your files are only accessible once  
 Choose a maximum number of downloads  
 Set an expiration date for your files  
+Set Global expiration date (optional)  
+Set Max Filesize  
+File for configuration (config.yaml)  
 
 ## Client-Side Encryption
 
