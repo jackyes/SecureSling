@@ -27,6 +27,9 @@ How it Works
 - Decryption:
   - When downloading, the encrypted files are decrypted on your device using the decryption key you provided (in the sharing link).
 
+## Password protected upload (Optional)
+You can choose to lock the upload section to ensure that no one without permission can share files.   
+
 ## Note:
 Only a randomly generated identifier that refers to the shared file is sent to the server.  
 The link parameters for the decryption key and original file name are never sent to the server, so no one other than the recipient and the sender can decrypt the file on their device.  
