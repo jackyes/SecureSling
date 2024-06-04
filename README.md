@@ -40,4 +40,4 @@ You can choose to lock the upload section to ensure that no one without permissi
 
 ## Note:
 Only a randomly generated identifier that refers to the shared file is sent to the server.  
-The link parameters for the decryption key and original file name are never sent to the server, so no one other than the recipient and the sender can decrypt the file on their device.  
+The link parameters for the decryption key and original file name are never sent to the server, so no one other than the recipient and the sender can decrypt the file.  
