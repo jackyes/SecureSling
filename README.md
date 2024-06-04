@@ -3,7 +3,7 @@
 
 SecureSling makes file sharing simple and straightforward with an intuitive interface that's easy to use.  
   
-## Secure E2E Encryption
+## Secure E2E Encryption & zero-knowledge architecture
   
 Files are encrypted with AES-GCM using a 256-bit key to ensure data privacy and security. This state-of-the-art encryption standard provides robust protection for your files.
 One-Time Downloads
