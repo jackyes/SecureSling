@@ -61,7 +61,7 @@ body {
 
 .progress {
     height: 30px;
-    background-color: #f3f3f3;
+    background: linear-gradient(to right, #0056b3, #007bff);
     border-radius: 5px;
     overflow: hidden;
     margin-top: 20px;
