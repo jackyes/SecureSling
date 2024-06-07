@@ -70,11 +70,9 @@ async function uploadFile() {
 
         const progressBar = document.getElementById('progressBar');
         const progressContainer = document.getElementById('progressContainer');
-        const spinner = document.getElementById('spinner');
         progressContainer.classList.remove('d-none');
         progressBar.style.width = '0%';
         progressBar.textContent = '0%';
-        spinner.style.display = 'block';
         statusMessage.textContent = 'Uploading...';
 
         const xhr = new XMLHttpRequest();
@@ -90,7 +88,6 @@ async function uploadFile() {
 
         xhr.onreadystatechange = async () => {
             if (xhr.readyState === XMLHttpRequest.DONE) {
-                spinner.style.display = 'none';
                 if (xhr.status === 200) {
                     const result = JSON.parse(xhr.responseText);
                     const fileID = result.file_id;
@@ -118,14 +115,12 @@ async function uploadFile() {
         };
 
         xhr.onerror = () => {
-            spinner.style.display = 'none';
             displayError('An error occurred while uploading the file.');
             progressContainer.classList.add('d-none');
         };
 
         xhr.send(formData);
     } catch (error) {
-        spinner.style.display = 'none';
         displayError(`Errore: ${error.message}`);
         progressContainer.classList.add('d-none');
     }
@@ -204,7 +199,6 @@ async function downloadFile() {
     const downloadedBytesElement = document.getElementById('downloadedBytes');
     const progressBar = document.getElementById('progressBar');
     const progressContainer = document.getElementById('progressContainer');
-    const spinner = document.getElementById('spinner');
     const errorMessage = document.getElementById('errorMessage');
 
     if (!fileID || !key || !iv) {
@@ -212,7 +206,6 @@ async function downloadFile() {
         return;
     }
 
-    spinner.style.display = 'block';
     progressContainer.classList.remove('d-none');
     progressBar.style.width = '0%';
     progressBar.textContent = '0%';
@@ -236,7 +229,6 @@ async function downloadFile() {
         };
 
         xhr.onload = async () => {
-            spinner.style.display = 'none';
             if (xhr.status === 200) {
                 progressBar.style.width = '100%';
                 progressBar.textContent = '100%';
@@ -256,14 +248,12 @@ async function downloadFile() {
         };
 
         xhr.onerror = () => {
-            spinner.style.display = 'none';
             displayError('An error occurred while downloading the file.');
             progressContainer.classList.add('d-none');
         };
 
         xhr.send();
     } catch (error) {
-        spinner.style.display = 'none';
         progressContainer.classList.add('d-none');
         displayError(`Error: ${error.message}`);
     }
