@@ -77,12 +77,37 @@ async function uploadFile() {
 
         const xhr = new XMLHttpRequest();
         xhr.open('POST', `${window.location.origin}/share/upload`, true);
+        const startTime = new Date().getTime();
 
         xhr.upload.addEventListener('progress', (e) => {
             if (e.lengthComputable) {
                 const percentComplete = (e.loaded / e.total) * 100;
                 progressBar.style.width = percentComplete + '%';
                 progressBar.textContent = Math.round(percentComplete) + '%';
+
+                // Calculate file size
+                const fileSize = e.total;
+                const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
+                const fileSizeGB = (fileSize / (1024 * 1024 * 1024)).toFixed(2);
+                const fileSizeText = fileSize < 1024 * 1024 ? `${fileSize} bytes` : (fileSize < 1024 * 1024 * 1024 ? `${fileSizeMB} MB` : `${fileSizeGB} GB`);
+
+                // Calculate upload speed
+                const now = new Date().getTime();
+                const timeDiff = now - startTime;
+                const speed = e.loaded / timeDiff;
+                const speedMB = (speed / 1024).toFixed(2);
+                const speedText = `${speedMB} MB/s`;
+
+                // Calculate uploaded size
+                const upfileSize = e.loaded;
+                const upfileSizeMB = (upfileSize / (1024 * 1024)).toFixed(2);
+                const upfileSizeGB = (upfileSize / (1024 * 1024 * 1024)).toFixed(2);
+                const upfileSizeText = upfileSize < 1024 * 1024 ? `${upfileSize} bytes` : (upfileSize < 1024 * 1024 * 1024 ? `${upfileSizeMB} MB` : `${upfileSizeGB} GB`);
+
+                uploadedBytes.textContent = `${upfileSizeText} / ${fileSizeText} - ${speedText}`;
+                //uploadedBytes = e.loaded;
+            } else {
+                console.log('Progress information cannot be calculated because the total size is unknown');
             }
         });
 
@@ -217,12 +242,35 @@ async function downloadFile() {
         xhr.open('GET', `/share/download/${fileID}`, true);
         xhr.responseType = 'arraybuffer';
 
+        const startTime = new Date().getTime();
+
         xhr.onprogress = (e) => {
             if (e.lengthComputable) {
                 const percentComplete = (e.loaded / e.total) * 100;
                 progressBar.style.width = percentComplete + '%';
                 progressBar.textContent = Math.round(percentComplete) + '%';
-                downloadedBytesElement.textContent = `${e.loaded} bytes scaricati`;
+
+                // Calculate file size
+                const fileSize = e.total;
+                const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
+                const fileSizeGB = (fileSize / (1024 * 1024 * 1024)).toFixed(2);
+                const fileSizeText = fileSize < 1024 * 1024 ? `${fileSize} bytes` : (fileSize < 1024 * 1024 * 1024 ? `${fileSizeMB} MB` : `${fileSizeGB} GB`);
+
+                // Calculate download speed
+                const now = new Date().getTime();
+                const timeDiff = now - startTime;
+                const speed = e.loaded / timeDiff;
+                const speedMB = (speed / 1024).toFixed(2);
+                const speedText = `${speedMB} MB/s`;
+
+                // Calculate downloaded size
+                const downfileSize = e.loaded;
+                const downfileSizeMB = (downfileSize / (1024 * 1024)).toFixed(2);
+                const downfileSizeGB = (downfileSize / (1024 * 1024 * 1024)).toFixed(2);
+                const downfileSizeText = downfileSize < 1024 * 1024 ? `${downfileSize} bytes` : (downfileSize < 1024 * 1024 * 1024 ? `${downfileSizeMB} MB` : `${downfileSizeGB} GB`);
+
+
+                downloadedBytesElement.textContent = `${downfileSizeText} / ${fileSizeText} - ${speedText}`;
             } else {
                 console.log('Progress information cannot be calculated because the total size is unknown');
             }
