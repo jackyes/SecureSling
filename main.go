@@ -125,14 +125,34 @@ func validateCredentials(username, password string) bool {
 
 // formatDuration formats a duration in hours into a human-readable string
 func formatDuration(hours int) string {
-	switch {
-	case hours < 24:
-		return fmt.Sprintf("%d hours", hours)
-	case hours < 24*7:
-		return fmt.Sprintf("%d days", hours/24)
-	default:
-		return fmt.Sprintf("%d weeks", hours/(24*7))
+	years := hours / (24 * 365)
+	remainingHours := hours % (24 * 365)
+	months := remainingHours / (24 * 30) // Approximation: 30 days per month
+	remainingHours = remainingHours % (24 * 30)
+	weeks := remainingHours / (24 * 7)
+	remainingHours = remainingHours % (24 * 7)
+	days := remainingHours / 24
+	remainingHours = remainingHours % 24
+
+	var durationParts []string
+
+	if years > 0 {
+		durationParts = append(durationParts, fmt.Sprintf("%d years", years))
 	}
+	if months > 0 {
+		durationParts = append(durationParts, fmt.Sprintf("%d months", months))
+	}
+	if weeks > 0 {
+		durationParts = append(durationParts, fmt.Sprintf("%d weeks", weeks))
+	}
+	if days > 0 {
+		durationParts = append(durationParts, fmt.Sprintf("%d days", days))
+	}
+	if remainingHours > 0 {
+		durationParts = append(durationParts, fmt.Sprintf("%d hours", remainingHours))
+	}
+
+	return strings.Join(durationParts, " ")
 }
 
 // serveUploadPage serves the upload page template
