@@ -117,7 +117,7 @@ async function uploadFile() {
                     const result = JSON.parse(xhr.responseText);
                     const fileID = result.file_id;
                     const keyString = btoa(JSON.stringify(exportedKey));
-                    const ivString = base64UrlEncode(iv)
+                    const ivString = base64UrlEncode(iv);
                     const fileName = encodeURIComponent(file.name);
                     const encodedLink = btoa(`fileID=${fileID}&key=${keyString}&iv=${ivString}&filename=${fileName}`);
                     const link = `${window.location.origin}/share/download.html#${encodedLink}`;
