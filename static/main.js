@@ -41,7 +41,19 @@ function displayError(message) {
 }
 
 // Function to upload a file
+let isUploading = false;
 async function uploadFile() {
+    if (isUploading) {
+        return;
+    }
+
+    isUploading = true;
+    const uploadButton = document.getElementById('uploadButton');
+    const selectFileButton = document.getElementById('selectFileButton');
+
+    uploadButton.disabled = true;
+    selectFileButton.disabled = true;
+
     const fileInput = document.getElementById('fileInput');
     const file = fileInput.files[0];
     if (!file) {
@@ -131,6 +143,9 @@ async function uploadFile() {
                     linkContainer.classList.remove('d-none');
                     progressContainer.classList.add('d-none');
                     statusMessage.textContent = 'File uploaded successfully';
+                    isUploading = false;
+                    uploadButton.disabled = false;
+                    selectFileButton.disabled = false;
                 } else {
                     const errorText = await xhr.responseText();
                     displayError(`Errore: ${errorText}`);
@@ -142,6 +157,10 @@ async function uploadFile() {
         xhr.onerror = () => {
             displayError('An error occurred while uploading the file.');
             progressContainer.classList.add('d-none');
+            isUploading = false;
+            uploadButton.disabled = false;
+            selectFileButton.disabled = false;
+            
         };
 
         xhr.send(formData);
@@ -212,8 +231,18 @@ function base64UrlDecode(base64) {
     }
     return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
 }
+
 // Function to download a file
+let isDownloading = false;
 async function downloadFile() {
+    if (isDownloading) {
+        return;
+    }
+
+    isDownloading = true;
+    const downloadButton = document.getElementById('downloadButton');
+    downloadButton.disabled = true;
+
     const hashParams = new URLSearchParams(atob(window.location.hash.substring(1)));
     const fileID = hashParams.get('fileID');
     const key = JSON.parse(atob(hashParams.get('key')));
@@ -290,14 +319,20 @@ async function downloadFile() {
                 URL.revokeObjectURL(url);
                 statusMessage.textContent = 'File downloaded and decrypted successfully';
                 progressContainer.classList.add('d-none');
+                isDownloading = false;
+                downloadButton.disabled = false;
             } else {
                 displayError('File not found');
+                isDownloading = false;
+                downloadButton.disabled = false;
             }
         };
 
         xhr.onerror = () => {
             displayError('An error occurred while downloading the file.');
-            progressContainer.classList.add('d-none');
+            progressContainer.classList.add('d-none');          
+            isDownloading = false;
+            downloadButton.disabled = false;
         };
 
         xhr.send();
