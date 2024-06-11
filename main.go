@@ -555,14 +555,14 @@ func main() {
 	c.AddFunc("@hourly", deleteOldFiles)
 	c.Start()
 
-	// Start the server on port 5556
+	// Start the server on port AppConfig.ServerPort
 	srv := &http.Server{
 		Handler: r,
 		Addr:    ":" + AppConfig.ServerPort,
 	}
 
 	// Print startup message and server status
-	fmt.Println("Starting server on :5556")
+	fmt.Println("Starting server on port " + AppConfig.ServerPort)
 	if AppConfig.EnableTLS {
 		fmt.Println("HTTPS enabled")
 		// Start the server with TLS enabled
