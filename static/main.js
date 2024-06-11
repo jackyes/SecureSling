@@ -370,6 +370,15 @@ async function downloadFile() {
                         resolve(passwordInput.value);
                     }
                 });
+            const submitPasswordButton = document.getElementById('submitPassword');
+            submitPasswordButton.addEventListener('click', async () => {
+                const passwordInputDiv = document.getElementById('passwordInputDiv');
+                const passwordInput = document.getElementById('password');
+                const password = passwordInput.value;
+                passwordInputDiv.classList.add('d-none');
+                const decryptionKey = await generateKeyFromPassword(password, salt);
+                await startFileDownload(fileID, decryptionKey.key, iv, filename, statusMessage, downloadedBytesElement, progressBar, progressContainer, downloadButton);
+            });
             });
 
             const decryptionKey = await generateKeyFromPassword(password, salt);
