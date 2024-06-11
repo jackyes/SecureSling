@@ -87,20 +87,20 @@ func basicAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// Ottieni l'indirizzo IP del client
+		// Get the client's IP address
 		ip := r.RemoteAddr
 
-		// Verifica se esiste un rate limiter per questo indirizzo IP
+		// Check to see if there is a rate limiter for this IP address
 		limiter, ok := rateLimiters[ip]
 		if !ok {
-			// Crea un nuovo rate limiter per questo indirizzo IP (ad esempio, 5 tentativi al minuto)
+			// Create a new rate limiter for this IP address (for example, 5 attempts per minute)
 			limiter = rate.NewLimiter(rate.Every(time.Minute/5), 5)
 			rateLimiters[ip] = limiter
 		}
 
-		// Consuma un token dal rate limiter
+		// Consume a token from the rate limiter
 		if !limiter.Allow() {
-			// Se non ci sono token disponibili, restituisci un errore 429 Too Many Requests
+			// If there are no tokens available, return a 429 Too Many Requests error
 			http.Error(w, "Too many requests", http.StatusTooManyRequests)
 			return
 		}
