@@ -44,7 +44,6 @@ type Cfg struct {
 	CertPathKey    string `yaml:"CertPathKey"`
 	MaxUploadSize  int64  `yaml:"MaxUploadSize"`
 	MaxExpireHours int    `yaml:"MaxExpireHours"`
-	UploadPassword string `yaml:"UploadPassword"`
 	EnablePassword bool   `yaml:"EnablePassword"`
 }
 
