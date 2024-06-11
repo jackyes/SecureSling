@@ -46,3 +46,25 @@ You can choose to lock the upload section to ensure that no one without permissi
 ## Note:
 Only a randomly generated identifier that refers to the shared file is sent to the server.  
 The link parameters for the decryption key and original file name are never sent to the server, so no one other than the recipient and the sender can decrypt the file.  
+The server can work as either HTTP (if you use a reverse proxy, see next section) or HTTPS.  
+  
+### Reverse proxy (nginx example, adjust settings as needed):
+````
+location /share/ {
+    proxy_pass http://localhost:8080/;
+    proxy_set_header Host $host;
+    rewrite ^/share$ /share/ permanent;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Scheme $scheme;
+	
+location /share/static {
+   proxy_pass http://localhost:8080/static;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Scheme $scheme;
+}
+````
+
