@@ -58,15 +58,38 @@ async function uploadFile() {
     const file = fileInput.files[0];
     if (!file) {
         displayError('Please select a file or drag and drop a file.');
+        isUploading = false;
+        uploadButton.disabled = false;
+        selectFileButton.disabled = false;
         return;
     }
     const statusMessage = document.getElementById('statusMessage');
     statusMessage.textContent = 'Encrypting...';
 
     try {
-        const { encryptedContent, key, iv } = await encryptFile(file);
-        const exportedKey = await exportKey(key);
+        let password = null;
+        const passwordInput = document.getElementById('password');
+        if (passwordInput.value) {
+            password = passwordInput.value;
+        }
+
         const formData = new FormData();
+        let encryptedContent, key, iv, salt;
+
+        if (password) {
+            const result = await encryptFileWithPassword(file, password);
+            encryptedContent = result.encryptedContent;
+            key = result.key;
+            iv = result.iv;
+            salt = result.salt;
+        } else {
+            const result = await encryptFile(file);
+            encryptedContent = result.encryptedContent;
+            key = result.key;
+            iv = result.iv;
+        }
+
+        const exportedKey = await exportKey(key);
         formData.append('file', new Blob([encryptedContent]), file.name);
         formData.append('oneTimeDownload', document.getElementById('oneTimeDownload').checked);
 
@@ -117,7 +140,6 @@ async function uploadFile() {
                 const upfileSizeText = upfileSize < 1024 * 1024 ? `${upfileSize} bytes` : (upfileSize < 1024 * 1024 * 1024 ? `${upfileSizeMB} MB` : `${upfileSizeGB} GB`);
 
                 uploadedBytes.textContent = `${upfileSizeText} / ${fileSizeText} - ${speedText}`;
-                //uploadedBytes = e.loaded;
             } else {
                 console.log('Progress information cannot be calculated because the total size is unknown');
             }
@@ -131,7 +153,15 @@ async function uploadFile() {
                     const keyString = btoa(JSON.stringify(exportedKey));
                     const ivString = base64UrlEncode(iv);
                     const fileName = encodeURIComponent(file.name);
-                    const encodedLink = btoa(`fileID=${fileID}&key=${keyString}&iv=${ivString}&filename=${fileName}`);
+                    let encodedLink; // Definire la variabile fuori dai blocchi if/else
+
+                    if (password) {
+                        const saltForLink = base64UrlEncode(salt);
+                        encodedLink = btoa(`fileID=${fileID}&iv=${ivString}&salt=${saltForLink}&filename=${fileName}`);
+                    } else {
+                        encodedLink = btoa(`fileID=${fileID}&key=${keyString}&iv=${ivString}&filename=${fileName}`);
+                    }
+
                     const link = `${window.location.origin}/share/download.html#${encodedLink}`;
 
                     const fileIDElement = document.getElementById('fileID');
@@ -150,6 +180,9 @@ async function uploadFile() {
                     const errorText = await xhr.responseText();
                     displayError(`Errore: ${errorText}`);
                     progressContainer.classList.add('d-none');
+                    isUploading = false;
+                    uploadButton.disabled = false;
+                    selectFileButton.disabled = false;
                 }
             }
         };
@@ -160,14 +193,73 @@ async function uploadFile() {
             isUploading = false;
             uploadButton.disabled = false;
             selectFileButton.disabled = false;
-            
+
         };
 
         xhr.send(formData);
     } catch (error) {
         displayError(`Errore: ${error.message}`);
         progressContainer.classList.add('d-none');
+        isUploading = false;
+        uploadButton.disabled = false;
+        selectFileButton.disabled = false;
     }
+}
+
+//function to generate encryption key from password
+async function generateKeyFromPassword(password, salt) {
+    if (!salt) {
+        salt = window.crypto.getRandomValues(new Uint8Array(16));
+    }
+    const enc = new TextEncoder();
+    const keyMaterial = await window.crypto.subtle.importKey(
+        "raw",
+        enc.encode(password),
+        { name: "PBKDF2" },
+        false,
+        ["deriveBits", "deriveKey"]
+    );
+
+    const key = await window.crypto.subtle.deriveKey(
+        {
+            name: "PBKDF2",
+            salt: salt,
+            iterations: 500000,
+            hash: "SHA-256"
+        },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        true,
+        ["encrypt", "decrypt"]
+    );
+
+    return { key, salt };
+}
+
+// Function to endecrypt a file with password
+async function encryptFileWithPassword(file, password) {
+    if (!window.crypto || !window.crypto.subtle) {
+        alert('Web Crypto API not supported. Please use a modern browser with HTTPS.');
+        return;
+    }
+    const { key, salt } = await generateKeyFromPassword(password);
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const encryptedContent = await window.crypto.subtle.encrypt(
+        { name: "AES-GCM", iv: iv },
+        key,
+        new Uint8Array(await file.arrayBuffer())
+    );
+    return { encryptedContent, key, iv, salt };
+}
+
+// Function to decrypt a file with password
+async function decryptFileWithPassword(encryptedContent, password, salt, iv) {
+    const key = await generateKeyFromPassword(password, salt);
+    return await window.crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: iv },
+        key,
+        encryptedContent
+    );
 }
 
 // Function to copy the link to the clipboard
@@ -234,6 +326,7 @@ function base64UrlDecode(base64) {
 
 // Function to download a file
 let isDownloading = false;
+
 async function downloadFile() {
     if (isDownloading) {
         return;
@@ -245,7 +338,8 @@ async function downloadFile() {
 
     const hashParams = new URLSearchParams(atob(window.location.hash.substring(1)));
     const fileID = hashParams.get('fileID');
-    const key = JSON.parse(atob(hashParams.get('key')));
+    const salt = hashParams.has('salt') ? base64UrlDecode(hashParams.get('salt')) : null;
+    const key = hashParams.has('key') ? JSON.parse(atob(hashParams.get('key'))) : null;
     const iv = base64UrlDecode(hashParams.get('iv'));
     const filename = decodeURIComponent(hashParams.get('filename'));
 
@@ -255,91 +349,115 @@ async function downloadFile() {
     const progressContainer = document.getElementById('progressContainer');
     const errorMessage = document.getElementById('errorMessage');
 
-    if (!fileID || !key || !iv) {
+    if (!fileID || (!salt && !key) || !iv) {
         statusMessage.textContent = 'Missing parameters';
         return;
     }
 
+    const passwordInputDiv = document.getElementById('passwordInputDiv');
+    const passwordInput = document.getElementById('password');
+
+    if (salt) {
+        passwordInputDiv.classList.remove('d-none');
+        passwordInput.focus();
+
+        try {
+            const password = await new Promise((resolve) => {
+                passwordInput.addEventListener('keyup', function handler(event) {
+                    if (event.key === 'Enter') {
+                        passwordInput.removeEventListener('keyup', handler);
+                        passwordInputDiv.classList.add('d-none');
+                        resolve(passwordInput.value);
+                    }
+                });
+            });
+
+            const decryptionKey = await generateKeyFromPassword(password, salt);
+            await startFileDownload(fileID, decryptionKey.key, iv, filename, statusMessage, downloadedBytesElement, progressBar, progressContainer, downloadButton);
+
+        } catch (error) {
+            displayError(`Error: ${error.message}`);
+        } finally {
+            isDownloading = false;
+            downloadButton.disabled = false;
+        }
+    } else {
+        const decryptionKey = await importKey(key);
+        await startFileDownload(fileID, decryptionKey, iv, filename, statusMessage, downloadedBytesElement, progressBar, progressContainer, downloadButton);
+        isDownloading = false;
+        downloadButton.disabled = false;
+    }
+}
+
+async function startFileDownload(fileID, decryptionKey, iv, filename, statusMessage, downloadedBytesElement, progressBar, progressContainer, downloadButton) {
     progressContainer.classList.remove('d-none');
     progressBar.style.width = '0%';
     progressBar.textContent = '0%';
     statusMessage.textContent = 'Downloading...';
 
-    try {
-        const decryptionKey = await importKey(key);
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', `/share/download/${fileID}`, true);
-        xhr.responseType = 'arraybuffer';
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', `/share/download/${fileID}`, true);
+    xhr.responseType = 'arraybuffer';
 
-        const startTime = new Date().getTime();
+    const startTime = new Date().getTime();
 
-        xhr.onprogress = (e) => {
-            if (e.lengthComputable) {
-                const percentComplete = (e.loaded / e.total) * 100;
-                progressBar.style.width = percentComplete + '%';
-                progressBar.textContent = Math.round(percentComplete) + '%';
+    xhr.onprogress = (e) => {
+        if (e.lengthComputable) {
+            const percentComplete = (e.loaded / e.total) * 100;
+            progressBar.style.width = percentComplete + '%';
+            progressBar.textContent = Math.round(percentComplete) + '%';
 
-                // Calculate file size
-                const fileSize = e.total;
-                const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
-                const fileSizeGB = (fileSize / (1024 * 1024 * 1024)).toFixed(2);
-                const fileSizeText = fileSize < 1024 * 1024 ? `${fileSize} bytes` : (fileSize < 1024 * 1024 * 1024 ? `${fileSizeMB} MB` : `${fileSizeGB} GB`);
+            const fileSize = e.total;
+            const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
+            const fileSizeGB = (fileSize / (1024 * 1024 * 1024)).toFixed(2);
+            const fileSizeText = fileSize < 1024 * 1024 ? `${fileSize} bytes` : (fileSize < 1024 * 1024 * 1024 ? `${fileSizeMB} MB` : `${fileSizeGB} GB`);
 
-                // Calculate download speed
-                const now = new Date().getTime();
-                const timeDiff = now - startTime;
-                const speed = e.loaded / timeDiff;
-                const speedMB = (speed / 1024).toFixed(2);
-                const speedText = `${speedMB} MB/s`;
+            const now = new Date().getTime();
+            const timeDiff = now - startTime;
+            const speed = e.loaded / timeDiff;
+            const speedMB = (speed / 1024).toFixed(2);
+            const speedText = `${speedMB} MB/s`;
 
-                // Calculate downloaded size
-                const downfileSize = e.loaded;
-                const downfileSizeMB = (downfileSize / (1024 * 1024)).toFixed(2);
-                const downfileSizeGB = (downfileSize / (1024 * 1024 * 1024)).toFixed(2);
-                const downfileSizeText = downfileSize < 1024 * 1024 ? `${downfileSize} bytes` : (downfileSize < 1024 * 1024 * 1024 ? `${downfileSizeMB} MB` : `${downfileSizeGB} GB`);
+            const downfileSize = e.loaded;
+            const downfileSizeMB = (downfileSize / (1024 * 1024)).toFixed(2);
+            const downfileSizeGB = (downfileSize / (1024 * 1024 * 1024)).toFixed(2);
+            const downfileSizeText = downfileSize < 1024 * 1024 ? `${downfileSize} bytes` : (downfileSize < 1024 * 1024 * 1024 ? `${downfileSizeMB} MB` : `${downfileSizeGB} GB`);
 
+            downloadedBytesElement.textContent = `${downfileSizeText} / ${fileSizeText} - ${speedText}`;
+        } else {
+            console.log('Progress information cannot be calculated because the total size is unknown');
+        }
+    };
 
-                downloadedBytesElement.textContent = `${downfileSizeText} / ${fileSizeText} - ${speedText}`;
-            } else {
-                console.log('Progress information cannot be calculated because the total size is unknown');
-            }
-        };
+    xhr.onload = async () => {
+        if (xhr.status === 200) {
+            progressBar.style.width = '100%';
+            progressBar.textContent = '100%';
+            const encryptedContent = xhr.response;
+            const file = await decryptFile(encryptedContent, decryptionKey, iv);
+            const url = URL.createObjectURL(file);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename || 'decrypted_' + fileID;
+            a.click();
+            URL.revokeObjectURL(url);
+            statusMessage.textContent = 'File downloaded and decrypted successfully';
+            progressContainer.classList.add('d-none');
+        } else {
+            displayError('File not found');
+        }
+        downloadButton.disabled = false;
+        isDownloading = false;
+    };
 
-        xhr.onload = async () => {
-            if (xhr.status === 200) {
-                progressBar.style.width = '100%';
-                progressBar.textContent = '100%';
-                const encryptedContent = xhr.response;
-                const file = await decryptFile(encryptedContent, decryptionKey, iv);
-                const url = URL.createObjectURL(file);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename || 'decrypted_' + fileID;
-                a.click();
-                URL.revokeObjectURL(url);
-                statusMessage.textContent = 'File downloaded and decrypted successfully';
-                progressContainer.classList.add('d-none');
-                isDownloading = false;
-                downloadButton.disabled = false;
-            } else {
-                displayError('File not found');
-                isDownloading = false;
-                downloadButton.disabled = false;
-            }
-        };
-
-        xhr.onerror = () => {
-            displayError('An error occurred while downloading the file.');
-            progressContainer.classList.add('d-none');          
-            isDownloading = false;
-            downloadButton.disabled = false;
-        };
-
-        xhr.send();
-    } catch (error) {
+    xhr.onerror = () => {
+        displayError('An error occurred while downloading the file.');
         progressContainer.classList.add('d-none');
-        displayError(`Error: ${error.message}`);
-    }
+        downloadButton.disabled = false;
+        isDownloading = false;
+    };
+
+    xhr.send();
 }
 
 // Function to decrypt a file
