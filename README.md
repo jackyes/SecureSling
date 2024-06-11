@@ -14,13 +14,15 @@ Set an expiration date for your files
 Set Global expiration date (optional)  
 Set Max Filesize  
 File for configuration (config.yaml)  
+Optionally choose a password to encrypt/access files 
 
 ## Client-Side Encryption
 
 With SecureSling, your files are encrypted and decrypted directly on your device.  
 This means that only you and the recipient can access the content of the files.  
 Our server never has access to your unencrypted files, ensuring maximum privacy and security.  
-  
+You can optionally choose a password to encrypt files. In this case the password is required (in addition to the sharing link) to download the file.  
+
 How it Works
 
 - Encryption:
