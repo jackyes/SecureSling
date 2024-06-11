@@ -32,6 +32,11 @@ var (
 	rateLimiters = make(map[string]*rate.Limiter)
 )
 
+type UserCredentials struct {
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
 type Cfg struct {
 	ServerPort     string `yaml:"ServerPort"`
 	EnableTLS      bool   `yaml:"EnableTLS"`
@@ -76,6 +81,21 @@ func formatSize(size int64) string {
 	}
 
 	return result
+}
+
+func readUserCredentials(filePath string) ([]UserCredentials, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	var credentials []UserCredentials
+	err = yaml.Unmarshal(data, &credentials)
+	if err != nil {
+		return nil, err
+	}
+
+	return credentials, nil
 }
 
 // basicAuth is a middleware function that implements basic authentication
@@ -139,8 +159,20 @@ func basicAuth(next http.HandlerFunc) http.HandlerFunc {
 
 // validateCredentials checks if the provided username and password are valid
 func validateCredentials(username, password string) bool {
-	// For now, we only check the password.
-	return bcrypt.CompareHashAndPassword([]byte(AppConfig.UploadPassword), []byte(password)) == nil
+	credentials, err := readUserCredentials("credentials.yaml")
+	if err != nil {
+		fmt.Println("Error reading credentials file:", err)
+		return false
+	}
+
+	for _, cred := range credentials {
+		if cred.Username == username {
+			err := bcrypt.CompareHashAndPassword([]byte(cred.Password), []byte(password))
+			return err == nil
+		}
+	}
+
+	return false
 }
 
 // formatDuration formats a duration in hours into a human-readable string
