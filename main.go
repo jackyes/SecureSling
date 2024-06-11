@@ -17,6 +17,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/robfig/cron/v3"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v3"
 )
 
@@ -27,7 +28,8 @@ const (
 )
 
 var (
-	AppConfig Cfg
+	AppConfig    Cfg
+	rateLimiters = make(map[string]*rate.Limiter)
 )
 
 type Cfg struct {
@@ -82,6 +84,24 @@ func basicAuth(next http.HandlerFunc) http.HandlerFunc {
 		// If password authentication is not enabled, skip to the next handler
 		if !AppConfig.EnablePassword {
 			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Ottieni l'indirizzo IP del client
+		ip := r.RemoteAddr
+
+		// Verifica se esiste un rate limiter per questo indirizzo IP
+		limiter, ok := rateLimiters[ip]
+		if !ok {
+			// Crea un nuovo rate limiter per questo indirizzo IP (ad esempio, 5 tentativi al minuto)
+			limiter = rate.NewLimiter(rate.Every(time.Minute/5), 5)
+			rateLimiters[ip] = limiter
+		}
+
+		// Consuma un token dal rate limiter
+		if !limiter.Allow() {
+			// Se non ci sono token disponibili, restituisci un errore 429 Too Many Requests
+			http.Error(w, "Too many requests", http.StatusTooManyRequests)
 			return
 		}
 
