@@ -224,7 +224,7 @@ async function generateKeyFromPassword(password, salt) {
         {
             name: "PBKDF2",
             salt: salt,
-            iterations: 500000,
+            iterations: 250000,
             hash: "SHA-256"
         },
         keyMaterial,
