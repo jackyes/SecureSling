@@ -39,6 +39,7 @@ You can choose to lock the upload section to ensure that no one without permissi
 
 | Screenshot |
 | --- |
+| ![Home](Screenshot/Home.png) | 
 | ![Upload](Screenshot/Upload.png) | 
 | ![File_Uploaded](Screenshot/File_Uploaded.png) | 
 | ![File_Downloaded](Screenshot/File_Downloaded.png) | 
