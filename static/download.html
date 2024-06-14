@@ -34,12 +34,12 @@
 
     <div class="container mt-5">
         <div class="card">
-            <div class="card-header text-center">
+            <div class="card-header text-center animated fadeIn delay-500ms">
                 <h3><i class="fas fa-cloud-download-alt"></i> Download Your File</h3>
             </div>
-            <div id="passwordInputDiv" class="form-group mb-3 d-none px-3">
+            <div id="passwordInputDiv" class="form-group mb-3 d-none px-3 animated fadeIn delay-500ms">
                 <label for="password">Password</label>
-                <small class="form-text text-muted">Press Enter or press the button to check password.</small>
+                <small class="form-text text-muted animated">Press Enter or press the button to check password.</small>
                 <div class="input-group">
                     <input type="password" id="password" class="form-control" autocomplete="off">
                     <div class="input-group-append">
@@ -48,7 +48,7 @@
                 </div>
                 <small class="form-text text-muted">Please enter the password to decrypt the file.</small>
             </div>
-            <div class="card-body text-center clearfix">
+            <div class="card-body text-center clearfix animated fadeIn delay-500ms">
                 <p id="fileName" class="lead"></p>
                 <button onclick="downloadFile()" id="downloadButton" class="btn btn-success btn-block mx-auto d-block mt-3 btn-icon btn-block"><i class="fas fa-download"></i> Download File</button>
                 <div class="progress mt-3 d-none" id="progressContainer">
@@ -60,8 +60,14 @@
                 <div id="errorMessage" class="alert alert-danger mt-3 d-none" role="alert"></div>
             </div>
         </div>
-       </div>
-    <footer class="footer mt-5 py-3">
+        <div class="card mt-4 text-center animated fadeIn delay-1000ms">
+            <p class="lead">Want to share your own files securely?</p>
+            <a href="upload.html" class="btn btn-primary btn-icon btn-block mx-auto mt-3 mb-4">
+                <i class="fas fa-file-upload"></i> Upload Your Files
+            </a>
+        </div>
+    </div>
+        <footer class="footer mt-5 py-3">
         <div class="container text-center">
             <span class="text-muted">SecureSling.</span>
             <i class="fab fa-github github-logo"></i>
