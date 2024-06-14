@@ -71,28 +71,36 @@
                     <div class="accordion-item">
                         <h2 class="accordion-header" id="headingOne">
                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
-                                Advanced Options
+                                <i class="fas fa-cogs me-2"></i> Advanced Options
                             </button>
                         </h2>
                         <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#advancedOptions">
                             <div class="accordion-body">
                                 <div class="form-check mb-3">
                                     <input type="checkbox" id="oneTimeDownload" class="form-check-input">
-                                    <label class="form-check-label" for="oneTimeDownload">One-time download</label>
+                                    <label class="form-check-label" for="oneTimeDownload">
+                                        <i class="fas fa-download me-2"></i> One-time download
+                                    </label>
                                     <small class="form-text text-muted">Allow the file to be downloaded only once.</small>
                                 </div>
                                 <div id="passwordInputDiv" class="form-group mb-3">
-                                    <label for="password">Password (Optional)</label>
+                                    <label for="password">
+                                        <i class="fas fa-lock me-2"></i> Password (Optional)
+                                    </label>
                                     <input type="password" id="password" class="form-control" autocomplete="off">
                                     <small class="form-text text-muted">Enter a password to encrypt the file. Remember the password, it will be needed for the download.</small>
                                 </div>
                                 <div class="form-group mb-3">
-                                    <label for="expiryDate">Expiration Date</label>
+                                    <label for="expiryDate">
+                                        <i class="fas fa-calendar-alt me-2"></i> Expiration Date
+                                    </label>
                                     <input type="date" id="expiryDate" class="form-control">
                                     <small class="form-text text-muted">Set a date after which the file will no longer be available for download.</small>
                                 </div>
                                 <div class="form-group mb-3">
-                                    <label for="maxDownloads">Max Downloads</label>
+                                    <label for="maxDownloads">
+                                        <i class="fas fa-sort-numeric-up me-2"></i> Max Downloads
+                                    </label>
                                     <input type="number" id="maxDownloads" class="form-control" min="1">
                                     <small class="form-text text-muted">Specify the maximum number of times the file can be downloaded.</small>
                                 </div>
