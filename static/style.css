@@ -1,5 +1,5 @@
 body {
-	background: linear-gradient(135deg, #284b70, #1e3a5f);
+    background: linear-gradient(135deg, #284b70, #1e3a5f);
     min-height: 100vh;
     display: flex;
     justify-content: center;
@@ -18,7 +18,7 @@ body {
     border-radius: 10px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     margin-bottom: 20px;
-	color: white;
+    color: white;
 }
 
 .card {
@@ -44,7 +44,7 @@ body {
     position: fixed;
     bottom: 0;
     width: 100%;
-	background: #2c3e50;
+    background: #2c3e50;
     padding: 10px 0;
     text-align: center;
 }
@@ -63,7 +63,7 @@ body {
     justify-content: center;
     align-items: center;
     height: 10vh;
-	background: #2c3e50;
+    background: #2c3e50;
 }
 
 .drag-drop-area {
