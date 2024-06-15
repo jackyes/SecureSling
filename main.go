@@ -45,6 +45,7 @@ type Cfg struct {
 	MaxUploadSize  int64  `yaml:"MaxUploadSize"`
 	MaxExpireHours int    `yaml:"MaxExpireHours"`
 	EnablePassword bool   `yaml:"EnablePassword"`
+	ShowUploadBox  bool   `yaml:"ShowUploadBox"`
 }
 
 // FileInfo stores metadata about uploaded files
@@ -554,6 +555,28 @@ func ReadConfig() {
 	}
 }
 
+func serveDownloadPage(w http.ResponseWriter, r *http.Request) {
+	// Construct the path to the download.html template
+	tmplPath := filepath.Join("templates", "download.html")
+
+	// Create a new template with a custom function map
+	tmpl := template.Must(template.New("").ParseFiles(tmplPath))
+
+	// Create a struct to hold data for the template
+	data := struct {
+		ShowUploadBox bool
+	}{
+		// Set the ShowUploadBox from the AppConfig
+		ShowUploadBox: AppConfig.ShowUploadBox,
+	}
+
+	// Execute the template with the data
+	if err := tmpl.ExecuteTemplate(w, "download.html", data); err != nil {
+		// If there's an error executing the template, return an error response
+		http.Error(w, "Error executing template: "+err.Error(), http.StatusInternalServerError)
+	}
+}
+
 func main() {
 	// Read configuration from file
 	ReadConfig()
@@ -566,6 +589,11 @@ func main() {
 	// Upload routes
 	r.HandleFunc("/upload", basicAuth(uploadFile)).Methods("POST")
 	r.HandleFunc("/upload.html", basicAuth(serveUploadPage)).Methods("GET")
+
+	r.HandleFunc("/download.html", serveDownloadPage).Methods("GET")
+	// Share download route (same as above, but with /share prefix)
+	r.HandleFunc("/share/download.html", serveDownloadPage).Methods("GET")
+
 	// Share upload routes (same as above, but with /share prefix)
 	r.HandleFunc("/share/upload", basicAuth(uploadFile)).Methods("POST")
 	r.HandleFunc("/share/upload.html", basicAuth(serveUploadPage)).Methods("GET")
