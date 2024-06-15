@@ -5,3 +5,4 @@ CertPathKey: "/etc/letsencrypt/live/xxx/privkey.pem"
 MaxUploadSize: 5368709120 #5GB, Max Upload Size
 MaxExpireHours: 120 #Max time before file delete
 EnablePassword: false #Enable password autentication for uploads (check credentials.yaml)
+ShowUploadBox: true #show or hide the upload your file advice in download page
