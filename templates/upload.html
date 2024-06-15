@@ -48,7 +48,7 @@
                     <button onclick="triggerFileInput()" id="selectFileButton" class="btn btn-primary btn-icon">
                         <i class="fas fa-file-upload"></i> Select File
                     </button>
-                    <input type="file" id="fileInput" class="form-control mb-3" style="display:none;" onchange="handleFileSelect(event)" />
+                    <input type="file" id="fileInput" class="form-control mb-3" style="display:none;" onchange="handleFileSelect(event)" multiple/>
                 </div>
                 <p id="selectedFileName" class="text-center mt-3"></p>
                 <button onclick="uploadFile()" id="uploadButton" class="btn btn-success btn-block mx-auto d-block mt-3 btn-icon">
@@ -122,5 +122,6 @@
     </footer>
     <script src="main.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
 </body>
 </html>
