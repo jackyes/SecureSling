@@ -24,7 +24,7 @@ async function exportKey(key) {
     return Array.from(new Uint8Array(exported));
 }
 
-// Funzione per importare una chiave da un array
+// Function to import a key from an array
 async function importKey(keyArray) {
     const key = new Uint8Array(keyArray);
     return await crypto.subtle.importKey("raw", key, { name: "AES-GCM" }, true, ["decrypt"]);
@@ -55,18 +55,34 @@ async function uploadFile() {
     selectFileButton.disabled = true;
 
     const fileInput = document.getElementById('fileInput');
-    const file = fileInput.files[0];
-    if (!file) {
+    const files = fileInput.files;
+    if (files.length === 0) {
         displayError('Please select a file or drag and drop a file.');
         isUploading = false;
         uploadButton.disabled = false;
         selectFileButton.disabled = false;
         return;
     }
+
     const statusMessage = document.getElementById('statusMessage');
-    statusMessage.textContent = 'Encrypting...';
+    statusMessage.textContent = 'Preparing files...';
+
+    let fileToEncrypt;
+    if (files.length === 1) {
+        fileToEncrypt = files[0];
+    } else {
+        // Create a new zip file if there are multiple files
+        const zip = new JSZip();
+        for (let i = 0; i < files.length; i++) {
+            zip.file(files[i].name, files[i]);
+        }
+        // Generate the zip file as a Blob
+        fileToEncrypt = await zip.generateAsync({ type: 'blob' });
+    }
 
     try {
+        // Encrypt the file (or zip)
+        statusMessage.textContent = 'Encrypting...';
         let password = null;
         const passwordInput = document.getElementById('password');
         if (passwordInput.value) {
@@ -77,20 +93,20 @@ async function uploadFile() {
         let encryptedContent, key, iv, salt;
 
         if (password) {
-            const result = await encryptFileWithPassword(file, password);
+            const result = await encryptFileWithPassword(fileToEncrypt, password);
             encryptedContent = result.encryptedContent;
             key = result.key;
             iv = result.iv;
             salt = result.salt;
         } else {
-            const result = await encryptFile(file);
+            const result = await encryptFile(fileToEncrypt);
             encryptedContent = result.encryptedContent;
             key = result.key;
             iv = result.iv;
         }
 
         const exportedKey = await exportKey(key);
-        formData.append('file', new Blob([encryptedContent]), file.name);
+        formData.append('file', new Blob([encryptedContent]), files.length === 1 ? files[0].name : 'encrypted.zip');
         formData.append('oneTimeDownload', document.getElementById('oneTimeDownload').checked);
 
         const expiryDate = document.getElementById('expiryDate').value;
@@ -152,8 +168,8 @@ async function uploadFile() {
                     const fileID = result.file_id;
                     const keyString = btoa(JSON.stringify(exportedKey));
                     const ivString = base64UrlEncode(iv);
-                    const fileName = encodeURIComponent(file.name);
-                    let encodedLink; // Definire la variabile fuori dai blocchi if/else
+                    const fileName = encodeURIComponent(files.length === 1 ? files[0].name : 'encrypted.zip');
+                    let encodedLink;
 
                     if (password) {
                         const saltForLink = base64UrlEncode(salt);
@@ -178,7 +194,7 @@ async function uploadFile() {
                     selectFileButton.disabled = false;
                 } else {
                     const errorText = await xhr.responseText();
-                    displayError(`Errore: ${errorText}`);
+                    displayError(`Error: ${errorText}`);
                     progressContainer.classList.add('d-none');
                     isUploading = false;
                     uploadButton.disabled = false;
@@ -193,12 +209,11 @@ async function uploadFile() {
             isUploading = false;
             uploadButton.disabled = false;
             selectFileButton.disabled = false;
-
         };
 
         xhr.send(formData);
     } catch (error) {
-        displayError(`Errore: ${error.message}`);
+        displayError(`Error: ${error.message}`);
         progressContainer.classList.add('d-none');
         isUploading = false;
         uploadButton.disabled = false;
@@ -483,3 +498,10 @@ async function decryptFile(encryptedContent, key, iv) {
         throw new Error("Decryption failed or data integrity check failed.");
     }
 }
+
+document.getElementById('fileInput').addEventListener('change', (event) => {
+    const fileName = event.target.files.length > 1
+        ? `${event.target.files.length} files selected`
+        : event.target.files[0].name;
+    document.getElementById('selectedFileName').textContent = fileName;
+});
