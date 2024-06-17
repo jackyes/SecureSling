@@ -37,7 +37,7 @@ function displayError(message) {
     errorMessage.classList.remove('d-none');
     setTimeout(() => {
         errorMessage.classList.add('d-none');
-    }, 5000);
+    }, 7000);
 }
 
 // Function to upload a file
@@ -68,16 +68,20 @@ async function uploadFile() {
     statusMessage.textContent = 'Preparing files...';
 
     let fileToEncrypt;
-    if (files.length === 1) {
-        fileToEncrypt = files[0];
-    } else {
-        // Create a new zip file if there are multiple files
+    if (files.length > 1) {
+        try {
         const zip = new JSZip();
         for (let i = 0; i < files.length; i++) {
             zip.file(files[i].name, files[i]);
         }
         // Generate the zip file as a Blob
         fileToEncrypt = await zip.generateAsync({ type: 'blob' });
+    } catch (error) {
+        displayError(`Error during compression. Check if you have enough available RAM.`);
+        return;
+    }
+    } else {
+        fileToEncrypt = files[0];
     }
 
     try {
@@ -221,69 +225,47 @@ async function uploadFile() {
     }
 }
 
-//function to generate encryption key from password
+// Function to generate encryption key from password
 async function generateKeyFromPassword(password, salt) {
     if (!salt) {
         salt = window.crypto.getRandomValues(new Uint8Array(16));
     }
-    const enc = new TextEncoder();
-    const keyMaterial = await window.crypto.subtle.importKey(
-        "raw",
-        enc.encode(password),
-        { name: "PBKDF2" },
+    const passwordKey = await crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(password),
+        { name: 'PBKDF2' },
         false,
-        ["deriveBits", "deriveKey"]
+        ['deriveKey']
     );
-
-    const key = await window.crypto.subtle.deriveKey(
+    const key = await crypto.subtle.deriveKey(
         {
-            name: "PBKDF2",
+            name: 'PBKDF2',
             salt: salt,
-            iterations: 250000,
-            hash: "SHA-256"
+            iterations: 100000,
+            hash: 'SHA-256'
         },
-        keyMaterial,
-        { name: "AES-GCM", length: 256 },
+        passwordKey,
+        { name: 'AES-GCM', length: 256 },
         true,
-        ["encrypt", "decrypt"]
+        ['encrypt', 'decrypt']
     );
-
     return { key, salt };
 }
 
-// Function to endecrypt a file with password
+// Function to encrypt file with password
 async function encryptFileWithPassword(file, password) {
     if (!window.crypto || !window.crypto.subtle) {
         alert('Web Crypto API not supported. Please use a modern browser with HTTPS.');
         return;
     }
     const { key, salt } = await generateKeyFromPassword(password);
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
-    const encryptedContent = await window.crypto.subtle.encrypt(
-        { name: "AES-GCM", iv: iv },
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encryptedContent = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: iv },
         key,
         new Uint8Array(await file.arrayBuffer())
     );
     return { encryptedContent, key, iv, salt };
-}
-
-// Function to decrypt a file with password
-async function decryptFileWithPassword(encryptedContent, password, salt, iv) {
-    const key = await generateKeyFromPassword(password, salt);
-    return await window.crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: iv },
-        key,
-        encryptedContent
-    );
-}
-
-// Function to copy the link to the clipboard
-function copyLink() {
-    const fileLinkElement = document.getElementById('fileLink');
-    fileLinkElement.select();
-    fileLinkElement.setSelectionRange(0, 99999);
-    document.execCommand("copy");
-    alert("Link copied to clipboard: " + fileLinkElement.value);
 }
 
 // Function to activate file input
@@ -296,8 +278,8 @@ function handleFileSelect(event) {
     const fileInput = event.target;
     const selectedFileName = document.getElementById('selectedFileName');
     if (fileInput.files.length > 0) {
-        const fileName = fileInput.files[0].name;
-        selectedFileName.textContent = `Selected file: ${fileName}`;
+        const fileNames = Array.from(fileInput.files).map(file => file.name).join(', ');
+        selectedFileName.textContent = `Selected files: ${fileNames}`;
     } else {
         selectedFileName.textContent = '';
     }
@@ -317,11 +299,12 @@ document.addEventListener("DOMContentLoaded", () => {
     dragDropArea.addEventListener('drop', (e) => {
         e.preventDefault();
         dragDropArea.classList.remove('drag-over');
-        const droppedFile = e.dataTransfer.files[0];
-        document.getElementById('fileInput').files = e.dataTransfer.files;
+        const files = e.dataTransfer.files;
+        document.getElementById('fileInput').files = files;
         handleFileSelect({ target: document.getElementById('fileInput') });
     });
 });
+
 function base64UrlEncode(arrayBuffer) {
     return btoa(String.fromCharCode.apply(null, new Uint8Array(arrayBuffer)))
         .replace(/\+/g, '-')
@@ -390,12 +373,19 @@ async function downloadFile() {
                 const passwordInputDiv = document.getElementById('passwordInputDiv');
                 const passwordInput = document.getElementById('password');
                 const password = passwordInput.value;
+                if (password === "") {
+                    displayError("Password can't be empty.")
+                    return
+                }
                 passwordInputDiv.classList.add('d-none');
                 const decryptionKey = await generateKeyFromPassword(password, salt);
                 await startFileDownload(fileID, decryptionKey.key, iv, filename, statusMessage, downloadedBytesElement, progressBar, progressContainer, downloadButton);
             });
             });
-
+            if (password === "") {
+                displayError("Password can't be empty.")
+                return
+            }
             const decryptionKey = await generateKeyFromPassword(password, salt);
             await startFileDownload(fileID, decryptionKey.key, iv, filename, statusMessage, downloadedBytesElement, progressBar, progressContainer, downloadButton);
 
@@ -484,6 +474,16 @@ async function startFileDownload(fileID, decryptionKey, iv, filename, statusMess
     xhr.send();
 }
 
+// Function to copy the link to the clipboard
+function copyLink() {
+    const fileLinkElement = document.getElementById('fileLink');
+    fileLinkElement.select();
+    fileLinkElement.setSelectionRange(0, 99999);
+    document.execCommand("copy");
+    alert("Link copied to clipboard: " + fileLinkElement.value);
+}
+
+
 // Function to decrypt a file
 async function decryptFile(encryptedContent, key, iv) {
     try {
@@ -495,13 +495,14 @@ async function decryptFile(encryptedContent, key, iv) {
         return new Blob([decryptedContent]);
     } catch (error) {
         console.error("Decryption failed or data integrity check failed:", error);
+        displayError("An error occurred during decryption. This may be due to a decryption failure or a data integrity check failure.");
         throw new Error("Decryption failed or data integrity check failed.");
     }
 }
 
+
+document.getElementById('uploadButton').addEventListener('click', uploadFile);
 document.getElementById('fileInput').addEventListener('change', (event) => {
-    const fileName = event.target.files.length > 1
-        ? `${event.target.files.length} files selected`
-        : event.target.files[0].name;
-    document.getElementById('selectedFileName').textContent = fileName;
+    const fileNames = Array.from(event.target.files).map(file => file.name).join(', ');
+    document.getElementById('selectedFileName').textContent = fileNames;
 });
