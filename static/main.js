@@ -447,18 +447,19 @@ async function downloadFile() {
 }
 
 async function startFileDownload(fileID, decryptionKey, iv, filename, statusMessage, downloadedBytesElement, progressBar, progressContainer, downloadButton) {
-    progressContainer.classList.remove('d-none');
-    progressBar.style.width = '0%';
-    progressBar.textContent = '0%';
-    statusMessage.textContent = 'Downloading...';
+    try {
+        progressContainer.classList.remove('d-none');
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
+        statusMessage.textContent = 'Downloading...';
 
-    const xhr = new XMLHttpRequest();
-    xhr.open('GET', `/share/download/${fileID}`, true);
-    xhr.responseType = 'arraybuffer';
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', `/share/download/${fileID}`, true);
+        xhr.responseType = 'arraybuffer';
 
-    const startTime = new Date().getTime();
+        const startTime = new Date().getTime();
 
-    xhr.onprogress = (e) => {
+        xhr.onprogress = (e) => {
         if (e.lengthComputable) {
             const percentComplete = (e.loaded / e.total) * 100;
             progressBar.style.width = percentComplete + '%';
@@ -484,38 +485,53 @@ async function startFileDownload(fileID, decryptionKey, iv, filename, statusMess
         } else {
             console.log('Progress information cannot be calculated because the total size is unknown');
         }
-    };
+                };
 
-    xhr.onload = async () => {
-        if (xhr.status === 200) {
-            progressBar.style.width = '100%';
-            progressBar.textContent = '100%';
-            const encryptedContent = xhr.response;
-            const file = await decryptFile(encryptedContent, decryptionKey, iv);
-            const url = URL.createObjectURL(file);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename || 'decrypted_' + fileID;
-            a.click();
-            URL.revokeObjectURL(url);
-            statusMessage.textContent = 'File downloaded and decrypted successfully';
+        xhr.onload = async () => {
+            try {
+                if (xhr.status === 200) {
+                    progressBar.style.width = '100%';
+                    progressBar.textContent = '100%';
+                    const encryptedContent = xhr.response;
+                    const file = await decryptFile(encryptedContent, decryptionKey, iv);
+                    const url = URL.createObjectURL(file);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename || 'decrypted_' + fileID;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    statusMessage.textContent = 'File downloaded and decrypted successfully';
+                    progressContainer.classList.add('d-none');
+                } else {
+                    displayError('File not found');
+                }
+            } catch (error) {
+                console.error('Error during decryption or file processing:', error);
+                displayError('An error occurred during file decryption or processing.');
+            } finally {
+                downloadButton.disabled = false;
+                isDownloading = false;
+            }
+        };
+
+        xhr.onerror = () => {
+            console.error('Network error during file download:', xhr.statusText);
+            displayError('An error occurred while downloading the file.');
             progressContainer.classList.add('d-none');
-        } else {
-            displayError('File not found');
-        }
-        downloadButton.disabled = false;
-        isDownloading = false;
-    };
+            downloadButton.disabled = false;
+            isDownloading = false;
+        };
 
-    xhr.onerror = () => {
-        displayError('An error occurred while downloading the file.');
+        xhr.send();
+    } catch (error) {
+        console.error('Error during file download request:', error);
+        displayError('An error occurred while preparing for file download.');
         progressContainer.classList.add('d-none');
         downloadButton.disabled = false;
         isDownloading = false;
-    };
-
-    xhr.send();
+    }
 }
+
 
 // Function to copy the link to the clipboard
 function copyLink() {
