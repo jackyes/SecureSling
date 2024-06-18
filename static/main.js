@@ -88,16 +88,16 @@ async function uploadFile() {
     let fileToEncrypt;
     if (files.length > 1) {
         try {
-        const zip = new JSZip();
-        for (let i = 0; i < files.length; i++) {
-            zip.file(files[i].name, files[i]);
+            const zip = new JSZip();
+            for (let i = 0; i < files.length; i++) {
+                zip.file(files[i].name, files[i]);
+            }
+            // Generate the zip file as a Blob
+            fileToEncrypt = await zip.generateAsync({ type: 'blob' });
+        } catch (error) {
+            displayError(`Error during compression. Check if you have enough available RAM.`);
+            return;
         }
-        // Generate the zip file as a Blob
-        fileToEncrypt = await zip.generateAsync({ type: 'blob' });
-    } catch (error) {
-        displayError(`Error during compression. Check if you have enough available RAM.`);
-        return;
-    }
     } else {
         fileToEncrypt = files[0];
     }
@@ -152,7 +152,19 @@ async function uploadFile() {
         xhr.open('POST', `${window.location.origin}/share/upload`, true);
         const startTime = new Date().getTime();
 
-        xhr.upload.addEventListener('progress', (e) => {
+        // Throttle function to limit the rate at which a function can fire.
+        function throttle(fn, limit) {
+            let lastCall = 0;
+            return function (...args) {
+                const now = (new Date).getTime();
+                if (now - lastCall >= limit) {
+                    lastCall = now;
+                    fn.apply(this, args);
+                }
+            };
+        }
+
+        const throttledProgressHandler = throttle((e) => {
             if (e.lengthComputable) {
                 const percentComplete = (e.loaded / e.total) * 100;
                 progressBar.style.width = percentComplete + '%';
@@ -181,7 +193,9 @@ async function uploadFile() {
             } else {
                 console.log('Progress information cannot be calculated because the total size is unknown');
             }
-        });
+        }, 100); // Update every 100ms
+
+        xhr.upload.addEventListener('progress', throttledProgressHandler);
 
         xhr.onreadystatechange = async () => {
             if (xhr.readyState === XMLHttpRequest.DONE) {
@@ -235,13 +249,13 @@ async function uploadFile() {
 
         try {
             xhr.send(formData);
-          } catch (error) {
+        } catch (error) {
             console.error("Error uploading file:", error);
             displayError("An error occurred while uploading the file.");
             isUploading = false;
             uploadButton.disabled = false;
             selectFileButton.disabled = false;
-          }
+        }
     } catch (error) {
         displayError(`Error: ${error.message}`);
         progressContainer.classList.add('d-none');
@@ -250,6 +264,7 @@ async function uploadFile() {
         selectFileButton.disabled = false;
     }
 }
+
 
 // Function to generate encryption key from password
 async function generateKeyFromPassword(password, salt) {
@@ -459,33 +474,47 @@ async function startFileDownload(fileID, decryptionKey, iv, filename, statusMess
 
         const startTime = new Date().getTime();
 
-        xhr.onprogress = (e) => {
-        if (e.lengthComputable) {
-            const percentComplete = (e.loaded / e.total) * 100;
-            progressBar.style.width = percentComplete + '%';
-            progressBar.textContent = Math.round(percentComplete) + '%';
-
-            const fileSize = e.total;
-            const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
-            const fileSizeGB = (fileSize / (1024 * 1024 * 1024)).toFixed(2);
-            const fileSizeText = fileSize < 1024 * 1024 ? `${fileSize} bytes` : (fileSize < 1024 * 1024 * 1024 ? `${fileSizeMB} MB` : `${fileSizeGB} GB`);
-
-            const now = new Date().getTime();
-            const timeDiff = now - startTime;
-            const speed = e.loaded / timeDiff;
-            const speedMB = (speed / 1024).toFixed(2);
-            const speedText = `${speedMB} MB/s`;
-
-            const downfileSize = e.loaded;
-            const downfileSizeMB = (downfileSize / (1024 * 1024)).toFixed(2);
-            const downfileSizeGB = (downfileSize / (1024 * 1024 * 1024)).toFixed(2);
-            const downfileSizeText = downfileSize < 1024 * 1024 ? `${downfileSize} bytes` : (downfileSize < 1024 * 1024 * 1024 ? `${downfileSizeMB} MB` : `${downfileSizeGB} GB`);
-
-            downloadedBytesElement.textContent = `${downfileSizeText} / ${fileSizeText} - ${speedText}`;
-        } else {
-            console.log('Progress information cannot be calculated because the total size is unknown');
+        // Throttle function to limit the rate at which a function can fire.
+        function throttle(fn, limit) {
+            let lastCall = 0;
+            return function (...args) {
+                const now = (new Date).getTime();
+                if (now - lastCall >= limit) {
+                    lastCall = now;
+                    fn.apply(this, args);
+                }
+            };
         }
-                };
+
+        const throttledProgressHandler = throttle((e) => {
+            if (e.lengthComputable) {
+                const percentComplete = (e.loaded / e.total) * 100;
+                progressBar.style.width = percentComplete + '%';
+                progressBar.textContent = Math.round(percentComplete) + '%';
+
+                const fileSize = e.total;
+                const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
+                const fileSizeGB = (fileSize / (1024 * 1024 * 1024)).toFixed(2);
+                const fileSizeText = fileSize < 1024 * 1024 ? `${fileSize} bytes` : (fileSize < 1024 * 1024 * 1024 ? `${fileSizeMB} MB` : `${fileSizeGB} GB`);
+
+                const now = new Date().getTime();
+                const timeDiff = now - startTime;
+                const speed = e.loaded / timeDiff;
+                const speedMB = (speed / 1024).toFixed(2);
+                const speedText = `${speedMB} MB/s`;
+
+                const downfileSize = e.loaded;
+                const downfileSizeMB = (downfileSize / (1024 * 1024)).toFixed(2);
+                const downfileSizeGB = (downfileSize / (1024 * 1024 * 1024)).toFixed(2);
+                const downfileSizeText = downfileSize < 1024 * 1024 ? `${downfileSize} bytes` : (downfileSize < 1024 * 1024 * 1024 ? `${downfileSizeMB} MB` : `${downfileSizeGB} GB`);
+
+                downloadedBytesElement.textContent = `${downfileSizeText} / ${fileSizeText} - ${speedText}`;
+            } else {
+                console.log('Progress information cannot be calculated because the total size is unknown');
+            }
+        }, 100); // Update every 100 ms
+
+        xhr.onprogress = throttledProgressHandler;
 
         xhr.onload = async () => {
             try {
