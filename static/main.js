@@ -95,7 +95,7 @@ async function uploadFile() {
             // Generate the zip file as a Blob
             fileToEncrypt = await zip.generateAsync({ type: 'blob' });
         } catch (error) {
-            displayError(`Error during compression. Check if you have enough available RAM.`);
+            displayError(`Error during compression. Check if you have enough available RAM and ensure you are not trying to compress a folder, as they are not supported.`);
             return;
         }
     } else {
