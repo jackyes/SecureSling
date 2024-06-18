@@ -4,30 +4,48 @@ async function encryptFile(file) {
         alert('Web Crypto API not supported. Please use a modern browser with HTTPS.');
         return;
     }
-    const key = await crypto.subtle.generateKey(
-        { name: "AES-GCM", length: 256 },
-        true,
-        ["encrypt", "decrypt"]
-    );
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encryptedContent = await crypto.subtle.encrypt(
-        { name: "AES-GCM", iv: iv },
-        key,
-        new Uint8Array(await file.arrayBuffer())
-    );
-    return { encryptedContent, key, iv };
+    try {
+	    const key = await crypto.subtle.generateKey(
+	        { name: "AES-GCM", length: 256 },
+	        true,
+	        ["encrypt", "decrypt"]
+	    );
+	    const iv = crypto.getRandomValues(new Uint8Array(12));
+	    const encryptedContent = await crypto.subtle.encrypt(
+	        { name: "AES-GCM", iv: iv },
+	        key,
+	        new Uint8Array(await file.arrayBuffer())
+	    );
+	    return { encryptedContent, key, iv };
+    } catch (error) {
+        console.error("Error during encryption:", error);
+        displayError("An error occurred during encryption.");
+        return null;
+    }
 }
 
 // Function to export a key in raw format
 async function exportKey(key) {
-    const exported = await crypto.subtle.exportKey("raw", key);
-    return Array.from(new Uint8Array(exported));
+    try {
+        const exported = await crypto.subtle.exportKey("raw", key);
+        return Array.from(new Uint8Array(exported));
+    } catch (error) {
+        console.error("Error exporting key:", error);
+        displayError("An error occurred while exporting the key.");
+        return null;
+    }
 }
 
 // Function to import a key from an array
 async function importKey(keyArray) {
-    const key = new Uint8Array(keyArray);
-    return await crypto.subtle.importKey("raw", key, { name: "AES-GCM" }, true, ["decrypt"]);
+    try {
+        const key = new Uint8Array(keyArray);
+        return await crypto.subtle.importKey("raw", key, { name: "AES-GCM" }, true, ["decrypt"]);
+    } catch (error) {
+        console.error("Error importing key:", error);
+        displayError("An error occurred while importing the key.");
+        return null;
+    }
 }
 
 // Function to display an error message
@@ -215,7 +233,15 @@ async function uploadFile() {
             selectFileButton.disabled = false;
         };
 
-        xhr.send(formData);
+        try {
+            xhr.send(formData);
+          } catch (error) {
+            console.error("Error uploading file:", error);
+            displayError("An error occurred while uploading the file.");
+            isUploading = false;
+            uploadButton.disabled = false;
+            selectFileButton.disabled = false;
+          }
     } catch (error) {
         displayError(`Error: ${error.message}`);
         progressContainer.classList.add('d-none');
@@ -230,27 +256,37 @@ async function generateKeyFromPassword(password, salt) {
     if (!salt) {
         salt = window.crypto.getRandomValues(new Uint8Array(16));
     }
-    const passwordKey = await crypto.subtle.importKey(
-        'raw',
-        new TextEncoder().encode(password),
-        { name: 'PBKDF2' },
-        false,
-        ['deriveKey']
-    );
-    const key = await crypto.subtle.deriveKey(
-        {
-            name: 'PBKDF2',
-            salt: salt,
-            iterations: 100000,
-            hash: 'SHA-256'
-        },
-        passwordKey,
-        { name: 'AES-GCM', length: 256 },
-        true,
-        ['encrypt', 'decrypt']
-    );
-    return { key, salt };
+
+    try {
+        const passwordKey = await crypto.subtle.importKey(
+            'raw',
+            new TextEncoder().encode(password),
+            { name: 'PBKDF2' },
+            false,
+            ['deriveKey']
+        );
+
+        const key = await crypto.subtle.deriveKey(
+            {
+                name: 'PBKDF2',
+                salt: salt,
+                iterations: 100000,
+                hash: 'SHA-256'
+            },
+            passwordKey,
+            { name: 'AES-GCM', length: 256 },
+            true,
+            ['encrypt', 'decrypt']
+        );
+
+        return { key, salt };
+    } catch (err) {
+        // Handle errors here, e.g., log them or throw a custom error
+        console.error('Key generation error:', err);
+        displayError("An error occurred while generating key from password.");
+    }
 }
+
 
 // Function to encrypt file with password
 async function encryptFileWithPassword(file, password) {
@@ -258,14 +294,21 @@ async function encryptFileWithPassword(file, password) {
         alert('Web Crypto API not supported. Please use a modern browser with HTTPS.');
         return;
     }
-    const { key, salt } = await generateKeyFromPassword(password);
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encryptedContent = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv: iv },
-        key,
-        new Uint8Array(await file.arrayBuffer())
-    );
-    return { encryptedContent, key, iv, salt };
+   try {
+        const { key, salt } = await generateKeyFromPassword(password);
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const encryptedContent = await crypto.subtle.encrypt(
+            { name: 'AES-GCM', iv: iv },
+            key,
+            new Uint8Array(await file.arrayBuffer())
+        );
+        return { encryptedContent, key, iv, salt };
+    } catch (err) {
+        // Handle errors here, e.g., log them or display a user-friendly message
+        console.error('Encryption with password error:', err);
+        displayError("An error occurred while encrypting the file with password.");
+        return null; // or throw another error or handle as appropriate
+    }
 }
 
 // Function to activate file input
