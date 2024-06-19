@@ -1,6 +1,6 @@
 ServerPort: 8080 #Server Listen Port
 EnableTLS: false #Enable https ( configure also  CertPathCrt and CertPathKey)
-CertPathCrt: "/etc/letsencrypt/live/xxx/cert.pem"
+CertPathCrt: "/etc/letsencrypt/live/xxx/fullchain.pem"
 CertPathKey: "/etc/letsencrypt/live/xxx/privkey.pem"
 MaxUploadSize: 5368709120 #5GB, Max Upload Size
 MaxExpireHours: 120 #Max time before file delete
