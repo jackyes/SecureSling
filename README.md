@@ -1,13 +1,13 @@
 # SecureSling
-## Easy to Use
+## Easy to Use 🚀
 
 SecureSling makes file sharing simple and straightforward with an intuitive interface that's easy to use.  
   
-## Secure E2E Encryption & zero-knowledge architecture
+## Secure E2E Encryption & zero-knowledge architecture 🔒
   
 Files are encrypted with AES-GCM using a 256-bit key to ensure data privacy and security. This state-of-the-art encryption standard provides robust protection for your files.
   
-## Flexible File Sharing
+## Flexible File Sharing 📁
 Enable one-time downloads to ensure your files are only accessible once  
 Choose a maximum number of downloads  
 Set an expiration date for your files  
@@ -16,7 +16,7 @@ Set Max Filesize
 File for configuration (config.yaml)  
 Optionally choose a password to encrypt/access files 
 
-## Client-Side Encryption
+## Client-Side Encryption 📱
 
 With SecureSling, your files are encrypted and decrypted directly on your device.  
 This means that only you and the recipient can access the content of the files.  
@@ -32,10 +32,10 @@ How it Works
 - Decryption:
   - When downloading, the encrypted files are decrypted on your device using the decryption key you provided (in the sharing link).
 
-## Password protected upload (Optional)
+## Password protected upload (Optional) 🔐  
 You can choose to lock the upload section to ensure that no one without permission can share files.   
 
-## Screenshots
+## Screenshots 🖼️
 
 | Screenshot |
 | --- |
@@ -44,10 +44,30 @@ You can choose to lock the upload section to ensure that no one without permissi
 | ![File_Uploaded](Screenshot/File_Uploaded.png) | 
 | ![File_Downloaded](Screenshot/File_Downloaded.png) | 
 
-## Note:
+## Note 📝:
 Only a randomly generated identifier that refers to the shared file is sent to the server.  
 The link parameters for the decryption key and original file name are never sent to the server, so no one other than the recipient and the sender can decrypt the file.  
 The server can work as either HTTP (if you use a reverse proxy, see next section) or HTTPS.  
+
+## Docker 🐳  
+
+It is possible to use an image on Docker Hub with the following command:
+
+    docker run -p 8080:8080 --name securesling -v /home/user/config.yaml:/config.yaml jackyes/securesling:latest
+    
+`/home/user/config.yaml` is the path to your config.yaml file (copy and edit the one in this repository).  
+change the default port `8080` accordingly with the one in config.yaml if you modify it.
+  
+### Build Docker image yourself  
+Follow these steps to build and run the Docker container:
+````
+git clone https://github.com/jackyes/SecureSling.git
+cd SecureSling
+# Edit config.yaml as needed
+nano config.yaml
+docker build -t securesling .
+docker run -p 8080:8080 securesling
+````
   
 ### Reverse proxy (nginx example, adjust settings as needed):
 ````
