@@ -98,6 +98,18 @@ func readUserCredentials(filePath string) ([]UserCredentials, error) {
 	return credentials, nil
 }
 
+
+// Middleware to add cache headers
+func cacheMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set Cache-Control and Expires headers for static files
+		w.Header().Set("Cache-Control", "public, max-age=86400") // 1 day
+		w.Header().Set("Expires", time.Now().AddDate(1, 0, 0).Format(http.TimeFormat))
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 // basicAuth is a middleware function that implements basic authentication
 func basicAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -267,10 +279,10 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 	for {
 		part, err := reader.NextPart()
 		if err == io.EOF {
-			break
+			break // No more parts to read
 		}
 		if err != nil {
-			http.Error(w, "Error reading next part", http.StatusInternalServerError)
+			http.Error(w, "Error reading multipart data", http.StatusInternalServerError)
 			return
 		}
 
@@ -325,6 +337,7 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Check if a file was uploaded
 	if !foundFile {
 		http.Error(w, "No file uploaded", http.StatusBadRequest)
 		return
@@ -605,8 +618,9 @@ func main() {
 
 	// Serve static files directly from the root URL path
 	// This allows us to serve static assets (e.g. CSS, JS, images) from the /static directory
-	r.PathPrefix("/share/").Handler(http.StripPrefix("/share", http.FileServer(http.Dir("./static"))))
-	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./static")))
+	// Serve static files with caching middleware
+	r.PathPrefix("/share/").Handler(http.StripPrefix("/share", cacheMiddleware(http.FileServer(http.Dir("./static")))))
+	r.PathPrefix("/").Handler(cacheMiddleware(http.FileServer(http.Dir("./static"))))
 
 	// Schedule deletion of old files every hour using cron
 	// This ensures that old files are automatically removed from the system
