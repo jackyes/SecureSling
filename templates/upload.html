@@ -36,6 +36,10 @@
         </div>
     </nav>
     <div class="container mt-5">
+        <div class="logo-container display-4 animated fadeIn delay-500ms">
+            <img src="/logo.webp" alt="Logo">
+            <h1>SecureSling</h1>
+        </div>
         <div class="jumbotron text-center main-content">
             <div class="hero-icon">
                 <i class="fas fa-file-upload fa-3x"></i>
@@ -52,7 +56,7 @@
                     <button onclick="triggerFileInput()" id="selectFileButton" class="btn btn-primary btn-icon">
                         <i class="fas fa-file-upload"></i> Select File
                     </button>
-                    <input type="file" id="fileInput" class="form-control mb-3" style="display:none;" onchange="handleFileSelect(event)" multiple/>
+                    <input type="file" id="fileInput" class="form-control mb-3" style="display:none;" onchange="handleFileSelect(event)"  multiple/>
                 </div>
                 <p id="selectedFileName" class="text-center mt-3"></p>
                 <button onclick="uploadFile()" id="uploadButton" class="btn btn-success btn-block mx-auto d-block mt-3 btn-icon">
