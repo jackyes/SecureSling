@@ -2,6 +2,7 @@ FROM golang:alpine AS builder
 WORKDIR /app
 COPY . .
 RUN apk update && apk upgrade
+RUN go get -u -v all
 RUN go mod download
 RUN go build -o SecureSling .
 FROM alpine:latest
