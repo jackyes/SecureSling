@@ -110,6 +110,20 @@ func cacheMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// Get Client ip from X-Forwarded-For header if exist
+func getClientIP(r *http.Request) string {
+    // Read the IP from the X-Forwarded-For header, if it exists
+    forwarded := r.Header.Get("X-Forwarded-For")
+    if forwarded != "" {
+        // X-Forwarded-For can contain a comma-separated list of IP addresses
+        // Take the first IP address in the list
+        parts := strings.Split(forwarded, ",")
+        return strings.TrimSpace(parts[0])
+    }
+    // Otherwise, return the remote IP address
+    return r.RemoteAddr
+}
+
 // basicAuth is a middleware function that implements basic authentication
 func basicAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -120,7 +134,7 @@ func basicAuth(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Get the client's IP address
-		ip := r.RemoteAddr
+		ip := getClientIP(r)
 
 		// Check to see if there is a rate limiter for this IP address
 		limiter, ok := rateLimiters[ip]
