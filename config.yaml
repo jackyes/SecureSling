@@ -1,8 +1,8 @@
-ServerPort: 8080 #Server Listen Port
-EnableTLS: false #Enable https ( configure also  CertPathCrt and CertPathKey)
-CertPathCrt: "/etc/letsencrypt/live/xxx/fullchain.pem"
-CertPathKey: "/etc/letsencrypt/live/xxx/privkey.pem"
-MaxUploadSize: 5368709120 #5GB, Max Upload Size
-MaxExpireHours: 120 #Max time before file delete
-EnablePassword: false #Enable password autentication for uploads (check credentials.yaml)
-ShowUploadBox: true #show or hide the upload your file advice in download page
+ServerPort: 8080 # Port the server will listen on
+EnableTLS: false # Enable HTTPS (configure CertPathCrt and CertPathKey if true)
+CertPathCrt: "/etc/letsencrypt/live/xxx/fullchain.pem" # Path to the SSL certificate file
+CertPathKey: "/etc/letsencrypt/live/xxx/privkey.pem" # Path to the SSL certificate key file
+MaxUploadSize: 5368709120 # Maximum upload size limit (Default: 5GB)
+MaxExpireHours: 120 # Maximum time (in hours) before the file is deleted (Default: 120h)
+EnablePassword: false # Enable password authentication for uploads (check credentials.yaml for configuration)
+ShowUploadBox: true # Show or hide the 'upload your file'prompt on the download page
