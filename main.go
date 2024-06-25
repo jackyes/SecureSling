@@ -22,9 +22,7 @@ import (
 )
 
 const (
-	configPath = "./config.yaml"
 	bufferSize = 10 * 1024 * 1024 // 10MB buffer size
-
 )
 
 var (
@@ -185,7 +183,12 @@ func basicAuth(next http.HandlerFunc) http.HandlerFunc {
 
 // validateCredentials checks if the provided username and password are valid
 func validateCredentials(username, password string) bool {
-	credentials, err := readUserCredentials("credentials.yaml")
+	credentialsPath := "config/credentials.yaml"
+	if _, err := os.Stat(credentialsPath); os.IsNotExist(err) {
+		credentialsPath = "credentials.yaml"
+	}
+
+	credentials, err := readUserCredentials(credentialsPath)
 	if err != nil {
 		fmt.Println("Error reading credentials file:", err)
 		return false
@@ -562,11 +565,17 @@ func deleteFileAndMetadata(filePath, infoFilePath string) {
 
 // ReadConfig reads the configuration file and populates the AppConfig struct
 func ReadConfig() {
+	configPath := "./config/config.yaml"
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		configPath = "./config.yaml"
+	}
+
 	// Open the configuration file
 	f, err := os.Open(configPath)
 	if err != nil {
 		// If there's an error, print it and exit
 		fmt.Println(err)
+		return
 	}
 	// Defer closing the file until we're done with it
 	defer f.Close()
