@@ -67,6 +67,7 @@ git clone https://github.com/jackyes/SecureSling.git
 cd SecureSling
 # Edit config.yaml as needed
 nano config.yaml
+nano credentials.yaml
 docker build -t securesling .
 docker run -p 8080:8080 securesling
 ````
