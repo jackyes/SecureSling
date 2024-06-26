@@ -296,7 +296,6 @@ async function generateKeyFromPassword(password, salt) {
 
         return { key, salt };
     } catch (err) {
-        // Handle errors here, e.g., log them or throw a custom error
         console.error('Key generation error:', err);
         displayError("An error occurred while generating key from password.");
     }
@@ -319,10 +318,9 @@ async function encryptFileWithPassword(file, password) {
         );
         return { encryptedContent, key, iv, salt };
     } catch (err) {
-        // Handle errors here, e.g., log them or display a user-friendly message
         console.error('Encryption with password error:', err);
         displayError("An error occurred while encrypting the file with password.");
-        return null; // or throw another error or handle as appropriate
+        return null; 
     }
 }
 
