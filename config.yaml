@@ -6,3 +6,4 @@ MaxUploadSize: 5368709120 # Maximum upload size limit (Default: 5GB)
 MaxExpireHours: 120 # Maximum time (in hours) before the file is deleted (Default: 120h)
 EnablePassword: false # Enable password authentication for uploads (check credentials.yaml for configuration)
 ShowUploadBox: true # Show or hide the 'upload your file'prompt on the download page
+UploadDir: "./uploads" # Set Upoads dir location
