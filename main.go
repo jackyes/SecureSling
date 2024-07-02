@@ -44,6 +44,7 @@ type Cfg struct {
 	MaxExpireHours int    `yaml:"MaxExpireHours"`
 	EnablePassword bool   `yaml:"EnablePassword"`
 	ShowUploadBox  bool   `yaml:"ShowUploadBox"`
+	UploadDir      string `yaml:"UploadDir"`
 }
 
 // FileInfo stores metadata about uploaded files
@@ -96,7 +97,6 @@ func readUserCredentials(filePath string) ([]UserCredentials, error) {
 	return credentials, nil
 }
 
-
 // Middleware to add cache headers
 func cacheMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -110,16 +110,16 @@ func cacheMiddleware(next http.Handler) http.Handler {
 
 // Get Client ip from X-Forwarded-For header if exist
 func getClientIP(r *http.Request) string {
-    // Read the IP from the X-Forwarded-For header, if it exists
-    forwarded := r.Header.Get("X-Forwarded-For")
-    if forwarded != "" {
-        // X-Forwarded-For can contain a comma-separated list of IP addresses
-        // Take the first IP address in the list
-        parts := strings.Split(forwarded, ",")
-        return strings.TrimSpace(parts[0])
-    }
-    // Otherwise, return the remote IP address
-    return r.RemoteAddr
+	// Read the IP from the X-Forwarded-For header, if it exists
+	forwarded := r.Header.Get("X-Forwarded-For")
+	if forwarded != "" {
+		// X-Forwarded-For can contain a comma-separated list of IP addresses
+		// Take the first IP address in the list
+		parts := strings.Split(forwarded, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	// Otherwise, return the remote IP address
+	return r.RemoteAddr
 }
 
 // basicAuth is a middleware function that implements basic authentication
@@ -306,7 +306,7 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 		// Check if the part is a file
 		if part.FormName() == "file" {
 			// Create a temporary file to store the uploaded file
-			tempFile, err = os.CreateTemp("uploads", "upload-*.enc")
+			tempFile, err = os.CreateTemp(AppConfig.UploadDir, "upload-*.enc")
 			if err != nil {
 				http.Error(w, "Error creating temporary file", http.StatusInternalServerError)
 				return
@@ -371,7 +371,7 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Save file info to JSON file
-	infoFile, err := os.Create(filepath.Join("uploads", fileInfo.FileID+".json"))
+	infoFile, err := os.Create(filepath.Join(AppConfig.UploadDir, fileInfo.FileID+".json"))
 	if err != nil {
 		tempFile.Close()
 		os.Remove(tempFilePath) // Clean up the temp file on error
@@ -383,8 +383,8 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 	err = json.NewEncoder(infoFile).Encode(fileInfo)
 	if err != nil {
 		tempFile.Close()
-		os.Remove(tempFilePath)                                      // Clean up the temp file on error
-		os.Remove(filepath.Join("uploads", fileInfo.FileID+".json")) // Clean up the JSON file on error
+		os.Remove(tempFilePath)                                                // Clean up the temp file on error
+		os.Remove(filepath.Join(AppConfig.UploadDir, fileInfo.FileID+".json")) // Clean up the JSON file on error
 		http.Error(w, "Error encoding JSON file", http.StatusInternalServerError)
 		return
 	}
@@ -393,8 +393,8 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 	jsonResponse, err := json.Marshal(fileInfo)
 	if err != nil {
 		tempFile.Close()
-		os.Remove(tempFilePath)                                      // Clean up the temp file on error
-		os.Remove(filepath.Join("uploads", fileInfo.FileID+".json")) // Clean up the JSON file on error
+		os.Remove(tempFilePath)                                                // Clean up the temp file on error
+		os.Remove(filepath.Join(AppConfig.UploadDir, fileInfo.FileID+".json")) // Clean up the JSON file on error
 		http.Error(w, "Error creating JSON response", http.StatusInternalServerError)
 		return
 	}
@@ -411,7 +411,7 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 	fileID := vars["fileID"]
 
 	// Open and decode file info
-	infoFilePath := filepath.Join("uploads", fileID+".json")
+	infoFilePath := filepath.Join(AppConfig.UploadDir, fileID+".json")
 	infoFile, err := os.Open(infoFilePath)
 	if err != nil {
 		// If the file is not found, return a 404 error
@@ -431,7 +431,7 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 	// Check if the file has expired
 	if fileInfo.ExpiryDate.Before(time.Now()) {
 		// If the file has expired, delete it and return a 410 error
-		deleteFileAndMetadata(filepath.Join("uploads", fileID), infoFilePath)
+		deleteFileAndMetadata(filepath.Join(AppConfig.UploadDir, fileID), infoFilePath)
 		http.Error(w, "File has expired", http.StatusGone)
 		return
 	}
@@ -456,7 +456,7 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 	infoFile.Close()
 
 	// Open the actual file for download
-	filePath := filepath.Join("uploads", fileID)
+	filePath := filepath.Join(AppConfig.UploadDir, fileID)
 	file, err := os.Open(filePath)
 	if err != nil {
 		// If the file is not found, return a 404 error
@@ -505,7 +505,7 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 // deleteOldFiles scans the uploads directory and deletes expired files
 func deleteOldFiles() {
 	// Read the contents of the uploads directory
-	files, err := os.ReadDir("uploads")
+	files, err := os.ReadDir(AppConfig.UploadDir)
 	if err != nil {
 		// If there's an error reading the directory, print a message and exit
 		fmt.Println("Error reading upload directory:", err)
@@ -517,7 +517,7 @@ func deleteOldFiles() {
 		// Check if the file is a JSON file (metadata file)
 		if filepath.Ext(file.Name()) == ".json" {
 			// Construct the full path to the metadata file
-			infoFilePath := filepath.Join("uploads", file.Name())
+			infoFilePath := filepath.Join(AppConfig.UploadDir, file.Name())
 			// Open the metadata file
 			infoFile, err := os.Open(infoFilePath)
 			if err != nil {
@@ -540,7 +540,7 @@ func deleteOldFiles() {
 			// Check if the file has expired
 			if time.Now().After(fileInfo.ExpiryDate) {
 				// Construct the full path to the file
-				filePath := filepath.Join("uploads", fileInfo.FileID)
+				filePath := filepath.Join(AppConfig.UploadDir, fileInfo.FileID)
 				// Delete the file and its metadata
 				deleteFileAndMetadata(filePath, infoFilePath)
 				fmt.Println("Deleted expired file:", fileInfo.FileID)
@@ -584,10 +584,15 @@ func ReadConfig() {
 	decoder := yaml.NewDecoder(f)
 	// Decode the YAML data into the AppConfig struct
 	err = decoder.Decode(&AppConfig)
-
 	if err != nil {
 		// If there's an error decoding the YAML, print it and exit
 		fmt.Println(err)
+		return
+	}
+
+	// Set default value for UploadDir if it's not specified in the config
+	if AppConfig.UploadDir == "" {
+		AppConfig.UploadDir = "./uploads"
 	}
 }
 
@@ -616,6 +621,15 @@ func serveDownloadPage(w http.ResponseWriter, r *http.Request) {
 func main() {
 	// Read configuration from file
 	ReadConfig()
+
+	// Ensure the upload directory exists
+	if _, err := os.Stat(AppConfig.UploadDir); os.IsNotExist(err) {
+		err := os.MkdirAll(AppConfig.UploadDir, os.ModePerm)
+		if err != nil {
+			fmt.Printf("Error creating upload directory: %v\n", err)
+			return
+		}
+	}
 
 	// Create a new router to handle HTTP requests
 	r := mux.NewRouter()
