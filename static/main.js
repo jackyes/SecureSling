@@ -74,8 +74,12 @@ async function uploadFile() {
 
     const fileInput = document.getElementById('fileInput');
     const files = fileInput.files;
-    if (files.length === 0) {
-        displayError('Please select a file or drag and drop a file.');
+    const passwordInput = document.getElementById('password');
+    const password = passwordInput ? passwordInput.value : null;
+    const expiryDate = document.getElementById('expiryDate').value;
+    const maxDownloads = document.getElementById('maxDownloads').value;
+
+    if (!validateInputs(files, password, expiryDate, maxDownloads)) {
         isUploading = false;
         uploadButton.disabled = false;
         selectFileButton.disabled = false;
@@ -105,12 +109,6 @@ async function uploadFile() {
     try {
         // Encrypt the file (or zip)
         statusMessage.textContent = 'Encrypting...';
-        let password = null;
-        const passwordInput = document.getElementById('password');
-        if (passwordInput.value) {
-            password = passwordInput.value;
-        }
-
         const formData = new FormData();
         let encryptedContent, key, iv, salt;
 
@@ -131,12 +129,10 @@ async function uploadFile() {
         formData.append('file', new Blob([encryptedContent]), files.length === 1 ? files[0].name : 'encrypted.zip');
         formData.append('oneTimeDownload', document.getElementById('oneTimeDownload').checked);
 
-        const expiryDate = document.getElementById('expiryDate').value;
         if (expiryDate) {
             formData.append('expiryDate', expiryDate);
         }
 
-        const maxDownloads = document.getElementById('maxDownloads').value;
         if (maxDownloads) {
             formData.append('maxDownloads', maxDownloads);
         }
@@ -341,6 +337,32 @@ function handleFileSelect(event) {
     }
 }
 
+// Function to validate inputs
+function validateInputs(files, password, expiryDate, maxDownloads) {
+    if (files.length === 0) {
+        displayError('Please select a file or drag and drop a file.');
+        console.log('No files selected.');
+        return false;
+    }
+
+    if (password !== null && password !== '' && password.length < 8) {
+        displayError('Password must be at least 8 characters long.');
+        return false;
+    }
+
+    if (expiryDate && new Date(expiryDate) <= new Date()) {
+        displayError('Expiry date must be in the future.');
+        return false;
+    }
+
+    if (maxDownloads && (!Number.isInteger(+maxDownloads) || +maxDownloads <= 0)) {
+        displayError('Max downloads must be a positive integer.');
+        return false;
+    }
+
+    return true;
+}
+
 // Event listener for drag and drop
 document.addEventListener("DOMContentLoaded", () => {
     const dragDropArea = document.getElementById('dragDropArea');
@@ -380,7 +402,6 @@ function base64UrlDecode(base64) {
 
 // Function to download a file
 let isDownloading = false;
-
 async function downloadFile() {
     if (isDownloading) {
         return;
