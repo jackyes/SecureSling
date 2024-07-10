@@ -36,15 +36,17 @@ type UserCredentials struct {
 }
 
 type Cfg struct {
-	ServerPort     string `yaml:"ServerPort"`
-	EnableTLS      bool   `yaml:"EnableTLS"`
-	CertPathCrt    string `yaml:"CertPathCrt"`
-	CertPathKey    string `yaml:"CertPathKey"`
-	MaxUploadSize  int64  `yaml:"MaxUploadSize"`
-	MaxExpireHours int    `yaml:"MaxExpireHours"`
-	EnablePassword bool   `yaml:"EnablePassword"`
-	ShowUploadBox  bool   `yaml:"ShowUploadBox"`
-	UploadDir      string `yaml:"UploadDir"`
+	ServerPort        string `yaml:"ServerPort"`
+	EnableTLS         bool   `yaml:"EnableTLS"`
+	CertPathCrt       string `yaml:"CertPathCrt"`
+	CertPathKey       string `yaml:"CertPathKey"`
+	MaxUploadSize     int64  `yaml:"MaxUploadSize"`
+	MaxExpireHours    int    `yaml:"MaxExpireHours"`
+	EnablePassword    bool   `yaml:"EnablePassword"`
+	ShowUploadBox     bool   `yaml:"ShowUploadBox"`
+	UploadDir         string `yaml:"UploadDir"`
+	RateLimitPeriod   int    `yaml:"RateLimitPeriod"`
+	RateLimitAttempts int    `yaml:"RateLimitAttempts"`
 }
 
 // FileInfo stores metadata about uploaded files
@@ -138,7 +140,7 @@ func basicAuth(next http.HandlerFunc) http.HandlerFunc {
 		limiter, ok := rateLimiters[ip]
 		if !ok {
 			// Create a new rate limiter for this IP address (for example, 5 attempts per minute)
-			limiter = rate.NewLimiter(rate.Every(time.Minute/5), 5)
+			limiter = rate.NewLimiter(rate.Every(time.Duration(AppConfig.RateLimitPeriod)*time.Second), AppConfig.RateLimitAttempts)
 			rateLimiters[ip] = limiter
 		}
 
@@ -593,6 +595,13 @@ func ReadConfig() {
 	// Set default value for UploadDir if it's not specified in the config
 	if AppConfig.UploadDir == "" {
 		AppConfig.UploadDir = "./uploads"
+	}
+	// Set default values for rate limiting if they are not specified in the config
+	if AppConfig.RateLimitPeriod <= 0 {
+		AppConfig.RateLimitPeriod = 60 // Default to 60 seconds
+	}
+	if AppConfig.RateLimitAttempts <= 0 {
+		AppConfig.RateLimitAttempts = 5 // Default to 5 attempts
 	}
 }
 
