@@ -7,5 +7,6 @@ MaxExpireHours: 120 # Maximum time (in hours) before the file is deleted (Defaul
 EnablePassword: false # Enable password authentication for uploads (check credentials.yaml for configuration)
 ShowUploadBox: true # Show or hide the 'upload your file'prompt on the download page
 UploadDir: "./uploads" # Set Upoads dir location
-RateLimitPeriod: 60    # 60 seconds
-RateLimitAttempts: 5   # 5 attempts per period
+# Configuration for login attempt rate limiting
+RateLimitPeriod: 60    # Time period (in seconds) for rate limiting login attempts
+RateLimitAttempts: 5   # Maximum number of login attempts allowed per IP during the specified period
