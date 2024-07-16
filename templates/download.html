@@ -20,6 +20,7 @@
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
+            {{if .ShowMenuDownloadPage}}
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
@@ -31,8 +32,10 @@
                     <li class="nav-item">
                         <a class="nav-link active" href="#">Download</a>
                     </li>
+                    
                 </ul>
             </div>
+            {{end}}
         </div>
     </nav>
 
@@ -80,7 +83,7 @@
         {{end}}
     </div>
 
-        <footer class="footer mt-5 py-3">
+    <footer class="footer mt-5 py-3">
         <div class="container text-center">
             <span class="text-muted">SecureSling.</span>
             <i class="fab fa-github github-logo"></i>
