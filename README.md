@@ -70,11 +70,11 @@ The server can work as either HTTP (if you use a reverse proxy, see next section
 
 It is possible to use an image on Docker Hub with the following command:
 
-    docker run -p 8080:8080 --name securesling -v /home/user/config.yaml:/config.yaml -v /home/user/credentials.yaml:/credentials.yaml -v /home/user/uploads:/uploads jackyes/securesling:latest
+    docker run -p 8080:8080 --name securesling -v /home/user/config.yaml:/root/config.yaml -v /home/user/credentials.yaml:/root/credentials.yaml  jackyes/securesling:latest
     
 `/home/user/config.yaml` is the path to your `config.yaml` file (copy and edit the one in this repository).  
 `/home/user/credentials.yaml` is the path to your `credentials.yaml` file (copy and edit the one in this repository).  
-`/home/user/uploads` is where ecrypted uploaded file are stored.  
+Optional: `-v /home/user/uploads:/root/uploads` where `/home/user/uploads` is where ecrypted uploaded file are stored.  
 change the default port `8080` accordingly with the one in config.yaml if you modify it.  
   
 ### Build Docker image yourself  
