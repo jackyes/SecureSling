@@ -36,17 +36,18 @@ type UserCredentials struct {
 }
 
 type Cfg struct {
-	ServerPort        string `yaml:"ServerPort"`
-	EnableTLS         bool   `yaml:"EnableTLS"`
-	CertPathCrt       string `yaml:"CertPathCrt"`
-	CertPathKey       string `yaml:"CertPathKey"`
-	MaxUploadSize     int64  `yaml:"MaxUploadSize"`
-	MaxExpireHours    int    `yaml:"MaxExpireHours"`
-	EnablePassword    bool   `yaml:"EnablePassword"`
-	ShowUploadBox     bool   `yaml:"ShowUploadBox"`
-	UploadDir         string `yaml:"UploadDir"`
-	RateLimitPeriod   int    `yaml:"RateLimitPeriod"`
-	RateLimitAttempts int    `yaml:"RateLimitAttempts"`
+	ServerPort           string `yaml:"ServerPort"`
+	EnableTLS            bool   `yaml:"EnableTLS"`
+	CertPathCrt          string `yaml:"CertPathCrt"`
+	CertPathKey          string `yaml:"CertPathKey"`
+	MaxUploadSize        int64  `yaml:"MaxUploadSize"`
+	MaxExpireHours       int    `yaml:"MaxExpireHours"`
+	EnablePassword       bool   `yaml:"EnablePassword"`
+	ShowUploadBox        bool   `yaml:"ShowUploadBox"`
+	ShowMenuDownloadPage *bool  `yaml:"ShowMenuDownloadPage"`
+	UploadDir            string `yaml:"UploadDir"`
+	RateLimitPeriod      int    `yaml:"RateLimitPeriod"`
+	RateLimitAttempts    int    `yaml:"RateLimitAttempts"`
 }
 
 // FileInfo stores metadata about uploaded files
@@ -603,6 +604,10 @@ func ReadConfig() {
 	if AppConfig.RateLimitAttempts <= 0 {
 		AppConfig.RateLimitAttempts = 5 // Default to 5 attempts
 	}
+	if AppConfig.ShowMenuDownloadPage == nil {
+		defaultValue := true
+		AppConfig.ShowMenuDownloadPage = &defaultValue
+	}
 }
 
 func serveDownloadPage(w http.ResponseWriter, r *http.Request) {
@@ -614,10 +619,13 @@ func serveDownloadPage(w http.ResponseWriter, r *http.Request) {
 
 	// Create a struct to hold data for the template
 	data := struct {
-		ShowUploadBox bool
+		ShowUploadBox        bool
+		ShowMenuDownloadPage bool
 	}{
 		// Set the ShowUploadBox from the AppConfig
 		ShowUploadBox: AppConfig.ShowUploadBox,
+		// Set the ShowMenuDownloadPage from the AppConfig
+		ShowMenuDownloadPage: *AppConfig.ShowMenuDownloadPage,
 	}
 
 	// Execute the template with the data
