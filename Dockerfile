@@ -11,7 +11,8 @@ RUN addgroup -S secureslinggroup && adduser -S secureslinguser -G secureslinggro
 WORKDIR /root/
 COPY . .
 COPY --from=builder /app/SecureSling .
-RUN chown -R secureslinguser:secureslinggroup /root/
+RUN mkdir uploads config
+RUN chown -R secureslinguser:secureslinggroup /root/ uploads config
 USER secureslinguser
 EXPOSE 8080
 CMD ["./SecureSling"]
