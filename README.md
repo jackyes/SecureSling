@@ -89,7 +89,8 @@ docker build -t securesling .
 docker run -p 8080:8080 securesling
 ````
   
-### Reverse proxy (nginx example, adjust settings as needed):
+### Reverse proxy:
+(nginx example, adjust settings as needed)  
 ````
 location /share/ {
     proxy_pass http://localhost:8080/;
@@ -108,4 +109,12 @@ location /share/static {
     proxy_set_header X-Scheme $scheme;
 }
 ````
+(apache example, adjust settings as needed)  
+````
+ProxyPass /share/ http://0.0.0.0:8080/
+ProxyPassReverse / http://0.0.0.0:8080/
+ProxyPass /share/static http://0.0.0.0:8080/
+ProxyPassReverse /static http://0.0.0.0:8080/
+````
+
 
