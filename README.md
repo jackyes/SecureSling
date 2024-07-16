@@ -34,6 +34,23 @@ How it Works
 
 ## Password protected upload (Optional) 🔐  
 You can choose to lock the upload section to ensure that no one without permission can share files.   
+  
+## Config
+````
+ServerPort: 8080 # Port the server will listen on
+EnableTLS: false # Enable HTTPS (configure CertPathCrt and CertPathKey if true)
+CertPathCrt: "/etc/letsencrypt/live/xxx/fullchain.pem" # Path to the SSL certificate file
+CertPathKey: "/etc/letsencrypt/live/xxx/privkey.pem" # Path to the SSL certificate key file
+MaxUploadSize: 5368709120 # Maximum upload size limit (Default: 5GB)
+MaxExpireHours: 120 # Maximum time (in hours) before the file is deleted (Default: 120h)
+EnablePassword: false # Enable password authentication for uploads (check credentials.yaml for configuration)
+ShowUploadBox: true # Show or hide the 'upload your file'prompt on the download page
+UploadDir: "./uploads" # Set Upoads dir location
+ShowMenuDownloadPage: true # Show Menubar in downloadpage (if true add menu entry for index and upload page)
+# Configuration for login attempt rate limiting
+RateLimitPeriod: 60    # Time period (in seconds) for rate limiting login attempts
+RateLimitAttempts: 5   # Maximum number of login attempts allowed per IP during the specified period
+````  
 
 ## Screenshots 🖼️
 
