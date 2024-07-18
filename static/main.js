@@ -5,18 +5,18 @@ async function encryptFile(file) {
         return;
     }
     try {
-	    const key = await crypto.subtle.generateKey(
-	        { name: "AES-GCM", length: 256 },
-	        true,
-	        ["encrypt", "decrypt"]
-	    );
-	    const iv = crypto.getRandomValues(new Uint8Array(12));
-	    const encryptedContent = await crypto.subtle.encrypt(
-	        { name: "AES-GCM", iv: iv },
-	        key,
-	        new Uint8Array(await file.arrayBuffer())
-	    );
-	    return { encryptedContent, key, iv };
+        const key = await crypto.subtle.generateKey(
+            { name: "AES-GCM", length: 256 },
+            true,
+            ["encrypt", "decrypt"]
+        );
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const encryptedContent = await crypto.subtle.encrypt(
+            { name: "AES-GCM", iv: iv },
+            key,
+            new Uint8Array(await file.arrayBuffer())
+        );
+        return { encryptedContent, key, iv };
     } catch (error) {
         console.error("Error during encryption:", error);
         displayError("An error occurred during encryption.");
@@ -92,12 +92,7 @@ async function uploadFile() {
     let fileToEncrypt;
     if (files.length > 1) {
         try {
-            const zip = new JSZip();
-            for (let i = 0; i < files.length; i++) {
-                zip.file(files[i].name, files[i]);
-            }
-            // Generate the zip file as a Blob
-            fileToEncrypt = await zip.generateAsync({ type: 'blob' });
+            fileToEncrypt = await compressFiles(files);
         } catch (error) {
             displayError(`Error during compression. Check if you have enough available RAM and ensure you are not trying to compress a folder, as they are not supported.`);
             return;
@@ -261,7 +256,6 @@ async function uploadFile() {
     }
 }
 
-
 // Function to generate encryption key from password
 async function generateKeyFromPassword(password, salt) {
     if (!salt) {
@@ -269,12 +263,15 @@ async function generateKeyFromPassword(password, salt) {
     }
 
     try {
-        const passwordKey = await crypto.subtle.importKey(
+        const encoder = new TextEncoder();
+        const passwordBuffer = encoder.encode(password);
+
+        const keyMaterial = await crypto.subtle.importKey(
             'raw',
-            new TextEncoder().encode(password),
+            passwordBuffer,
             { name: 'PBKDF2' },
             false,
-            ['deriveKey']
+            ['deriveBits', 'deriveKey']
         );
 
         const key = await crypto.subtle.deriveKey(
@@ -284,7 +281,7 @@ async function generateKeyFromPassword(password, salt) {
                 iterations: 100000,
                 hash: 'SHA-256'
             },
-            passwordKey,
+            keyMaterial,
             { name: 'AES-GCM', length: 256 },
             true,
             ['encrypt', 'decrypt']
@@ -296,7 +293,6 @@ async function generateKeyFromPassword(password, salt) {
         displayError("An error occurred while generating key from password.");
     }
 }
-
 
 // Function to encrypt file with password
 async function encryptFileWithPassword(file, password) {
@@ -316,7 +312,7 @@ async function encryptFileWithPassword(file, password) {
     } catch (err) {
         console.error('Encryption with password error:', err);
         displayError("An error occurred while encrypting the file with password.");
-        return null; 
+        return null;
     }
 }
 
@@ -345,9 +341,12 @@ function validateInputs(files, password, expiryDate, maxDownloads) {
         return false;
     }
 
-    if (password !== null && password !== '' && password.length < 8) {
-        displayError('Password must be at least 8 characters long.');
-        return false;
+    if (password !== null && password !== '') {
+        const passwordStrength = checkPasswordStrength(password);
+        if (passwordStrength < 3) {
+            displayError('Password is too weak. It should be at least 8 characters long and include uppercase, lowercase, numbers, and special characters.');
+            return false;
+        }
     }
 
     if (expiryDate && new Date(expiryDate) <= new Date()) {
@@ -361,6 +360,26 @@ function validateInputs(files, password, expiryDate, maxDownloads) {
     }
 
     return true;
+}
+
+// Function to check password strength
+function checkPasswordStrength(password) {
+    let strength = 0;
+    if (password.length >= 8) strength++;
+    if (password.match(/[a-z]+/)) strength++;
+    if (password.match(/[A-Z]+/)) strength++;
+    if (password.match(/[0-9]+/)) strength++;
+    if (password.match(/[^a-zA-Z0-9]+/)) strength++;
+    return strength;
+}
+
+// Function to compress files
+async function compressFiles(files) {
+    const zip = new JSZip();
+    for (let i = 0; i < files.length; i++) {
+        zip.file(files[i].name, files[i]);
+    }
+    return await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 9 } });
 }
 
 // Event listener for drag and drop
@@ -580,7 +599,6 @@ async function startFileDownload(fileID, decryptionKey, iv, filename, statusMess
     }
 }
 
-
 // Function to copy the link to the clipboard
 function copyLink() {
     const fileLinkElement = document.getElementById('fileLink');
@@ -589,7 +607,6 @@ function copyLink() {
     document.execCommand("copy");
     alert("Link copied to clipboard: " + fileLinkElement.value);
 }
-
 
 // Function to decrypt a file
 async function decryptFile(encryptedContent, key, iv) {
@@ -607,9 +624,17 @@ async function decryptFile(encryptedContent, key, iv) {
     }
 }
 
-
+// Event listeners
 document.getElementById('uploadButton').addEventListener('click', uploadFile);
 document.getElementById('fileInput').addEventListener('change', (event) => {
     const fileNames = Array.from(event.target.files).map(file => file.name).join(', ');
     document.getElementById('selectedFileName').textContent = fileNames;
 });
+
+// Function to verify file integrity
+async function verifyFileIntegrity(originalFile, decryptedFile) {
+    const originalHash = await crypto.subtle.digest('SHA-256', await originalFile.arrayBuffer());
+    const decryptedHash = await crypto.subtle.digest('SHA-256', await decryptedFile.arrayBuffer());
+    return originalHash.byteLength === decryptedHash.byteLength &&
+           crypto.subtle.timingSafeEqual(new Uint8Array(originalHash), new Uint8Array(decryptedHash));
+}
