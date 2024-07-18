@@ -95,7 +95,16 @@
                                     <label for="password">
                                         <i class="fas fa-lock me-2"></i> Password (Optional)
                                     </label>
-                                    <input type="password" id="password" class="form-control" autocomplete="off">
+                                    <div class="input-group">
+                                        <input type="password" id="password" class="form-control" autocomplete="off">
+                                        <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="password-strength-meter">
+                                        <div id="strengthMeter"></div>
+                                    </div>
+                                    <small id="passwordStrength" class="form-text"></small>
                                     <small class="form-text text-muted">Enter a password to encrypt the file. Remember the password, it will be needed for the download.</small>
                                 </div>
                                 <div class="form-group mb-3">
@@ -128,6 +137,70 @@
             </a>
         </div>
     </footer>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const passwordInput = document.getElementById('password');
+            const togglePassword = document.getElementById('togglePassword');
+            const strengthMeter = document.getElementById('strengthMeter');
+            const passwordStrength = document.getElementById('passwordStrength');
+
+            togglePassword.addEventListener('click', function() {
+                const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                passwordInput.setAttribute('type', type);
+                this.querySelector('i').classList.toggle('fa-eye');
+                this.querySelector('i').classList.toggle('fa-eye-slash');
+            });
+
+            passwordInput.addEventListener('input', function() {
+                const strength = checkPasswordStrength(this.value);
+                updatePasswordStrengthUI(strength);
+            });
+
+            function checkPasswordStrength(password) {
+                let strength = 0;
+                if (password.length >= 8) strength++;
+                if (password.match(/[a-z]+/)) strength++;
+                if (password.match(/[A-Z]+/)) strength++;
+                if (password.match(/[0-9]+/)) strength++;
+                if (password.match(/[^a-zA-Z0-9]+/)) strength++;
+                return strength;
+            }
+
+            function updatePasswordStrengthUI(strength) {
+                const width = (strength / 5) * 100;
+                strengthMeter.style.width = width + '%';
+
+                let color, text;
+                switch(strength) {
+                    case 0:
+                    case 1:
+                        color = '#ff4d4d';
+                        text = 'Very weak';
+                        break;
+                    case 2:
+                        color = '#ffa64d';
+                        text = 'Weak';
+                        break;
+                    case 3:
+                        color = '#ffff4d';
+                        text = 'Medium';
+                        break;
+                    case 4:
+                        color = '#4dff4d';
+                        text = 'Strong';
+                        break;
+                    case 5:
+                        color = '#4d4dff';
+                        text = 'Very strong';
+                        break;
+                }
+
+                strengthMeter.style.backgroundColor = color;
+                passwordStrength.textContent = text;
+                passwordStrength.style.color = color;
+            }
+        });
+    </script>
     <script src="main.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js" integrity="sha512-7Pi/otdlbbCR+LnW+F7PwFcSDJOuUJB3OxtEHbg4vSMvzvJjde4Po1v4BR9Gdc9aXNUNFVUY+SK51wWT8WF0Gg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
