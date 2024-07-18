@@ -333,3 +333,14 @@ ul {
     transform: skewY(5deg);
     z-index: -1;
 }
+
+.password-strength-meter {
+     height: 5px;
+     background-color: #ddd;
+     margin-top: 5px;
+}
+.password-strength-meter div {
+    height: 100%;
+    width: 0;
+    transition: width 0.3s ease-in-out;
+}
