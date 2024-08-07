@@ -220,8 +220,9 @@ async function uploadFile() {
                     uploadButton.disabled = false;
                     selectFileButton.disabled = false;
                 } else {
-                    const errorText = await xhr.responseText();
-                    displayError(`Error: ${errorText}`);
+                    console.error(`Error: Server responded with status ${xhr.status}`);
+                    console.error(`Response text: ${xhr.responseText}`);
+                    displayError(`Error ${xhr.status}: ${xhr.statusText}. Please try again later or contact support if the problem persists.`);
                     progressContainer.classList.add('d-none');
                     isUploading = false;
                     uploadButton.disabled = false;
