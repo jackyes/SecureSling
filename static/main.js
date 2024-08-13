@@ -1,3 +1,6 @@
+const PBKDF2_ITERATIONS = 100000;
+const AES_KEY_LENGTH = 256;
+
 // Function to encrypt a file
 async function encryptFile(file) {
     if (!crypto || !crypto.subtle) {
@@ -6,7 +9,7 @@ async function encryptFile(file) {
     }
     try {
         const key = await crypto.subtle.generateKey(
-            { name: "AES-GCM", length: 256 },
+            { name: "AES-GCM", length: AES_KEY_LENGTH },
             true,
             ["encrypt", "decrypt"]
         );
@@ -279,11 +282,11 @@ async function generateKeyFromPassword(password, salt) {
             {
                 name: 'PBKDF2',
                 salt: salt,
-                iterations: 100000,
+                iterations: PBKDF2_ITERATIONS,
                 hash: 'SHA-256'
             },
             keyMaterial,
-            { name: 'AES-GCM', length: 256 },
+            { name: 'AES-GCM', length: AES_KEY_LENGTH },
             true,
             ['encrypt', 'decrypt']
         );
@@ -603,10 +606,9 @@ async function startFileDownload(fileID, decryptionKey, iv, filename, statusMess
 // Function to copy the link to the clipboard
 function copyLink() {
     const fileLinkElement = document.getElementById('fileLink');
-    fileLinkElement.select();
-    fileLinkElement.setSelectionRange(0, 99999);
-    document.execCommand("copy");
-    alert("Link copied to clipboard: " + fileLinkElement.value);
+    navigator.clipboard.writeText(fileLinkElement.value)
+        .then(() => alert("Link copied to clipboard: " + fileLinkElement.value))
+        .catch(err => handleError(err, "Unable to copy the link to the clipboard"));
 }
 
 // Function to decrypt a file
