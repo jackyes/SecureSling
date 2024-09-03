@@ -1,5 +1,6 @@
 const PBKDF2_ITERATIONS = 100000;
 const AES_KEY_LENGTH = 256;
+const SALT_LENGTH = 16; // Added salt length constant
 
 // Function to encrypt a file
 async function encryptFile(file) {
@@ -263,7 +264,7 @@ async function uploadFile() {
 // Function to generate encryption key from password
 async function generateKeyFromPassword(password, salt) {
     if (!salt) {
-        salt = window.crypto.getRandomValues(new Uint8Array(16));
+        salt = window.crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
     }
 
     try {
@@ -287,7 +288,7 @@ async function generateKeyFromPassword(password, salt) {
             },
             keyMaterial,
             { name: 'AES-GCM', length: AES_KEY_LENGTH },
-            true,
+            false, // Changed to false for better security
             ['encrypt', 'decrypt']
         );
 
@@ -295,6 +296,7 @@ async function generateKeyFromPassword(password, salt) {
     } catch (err) {
         console.error('Key generation error:', err);
         displayError("An error occurred while generating key from password.");
+        throw err; // Re-throw the error for proper handling
     }
 }
 
@@ -339,7 +341,7 @@ function handleFileSelect(event) {
 
 // Function to validate inputs
 function validateInputs(files, password, expiryDate, maxDownloads) {
-    if (files.length === 0) {
+    if (files && files.length === 0) {
         displayError('Please select a file or drag and drop a file.');
         console.log('No files selected.');
         return false;
@@ -365,6 +367,9 @@ function validateInputs(files, password, expiryDate, maxDownloads) {
 
     return true;
 }
+
+// Make validateInputs available globally
+window.validateInputs = validateInputs;
 
 // Function to check password strength
 function checkPasswordStrength(password) {
@@ -638,6 +643,51 @@ document.getElementById('fileInput').addEventListener('change', (event) => {
 async function verifyFileIntegrity(originalFile, decryptedFile) {
     const originalHash = await crypto.subtle.digest('SHA-256', await originalFile.arrayBuffer());
     const decryptedHash = await crypto.subtle.digest('SHA-256', await decryptedFile.arrayBuffer());
-    return originalHash.byteLength === decryptedHash.byteLength &&
-           crypto.subtle.timingSafeEqual(new Uint8Array(originalHash), new Uint8Array(decryptedHash));
+    
+    if (originalHash.byteLength !== decryptedHash.byteLength) {
+        return false;
+    }
+    
+    return crypto.subtle.timingSafeEqual(new Uint8Array(originalHash), new Uint8Array(decryptedHash));
+}
+// Function to validate and sanitize input
+function validateInput(input, type = 'text') {
+    if (typeof input !== 'string') {
+        throw new Error('Input must be a string');
+    }
+
+    // Trim whitespace
+    input = input.trim();
+
+    switch (type) {
+        case 'text':
+            // Remove any potentially dangerous characters for general text
+            return input.replace(/[&<>"']/g, function (m) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#39;'
+                }[m];
+            });
+        case 'filename':
+            // Remove any characters that are invalid in filenames
+            return input.replace(/[<>:"/\\|?*\x00-\x1F]/g, '');
+        case 'number':
+            // Ensure the input is a valid number
+            if (!/^\d+$/.test(input)) {
+                throw new Error('Input must be a valid number');
+            }
+            return input;
+        case 'date':
+            // Ensure the input is a valid date
+            const date = new Date(input);
+            if (isNaN(date.getTime())) {
+                throw new Error('Input must be a valid date');
+            }
+            return date.toISOString().split('T')[0]; // Return YYYY-MM-DD format
+        default:
+            throw new Error('Invalid input type specified');
+    }
 }
