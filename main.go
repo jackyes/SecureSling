@@ -271,6 +271,17 @@ func serveUploadPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// validateInput checks if the input data is valid
+func validateInput(oneTimeDownload bool, expiryDate time.Time, maxDownloads int) error {
+	if expiryDate.Before(time.Now()) {
+		return fmt.Errorf("expiry date must be in the future")
+	}
+	if maxDownloads < 0 {
+		return fmt.Errorf("max downloads must be non-negative")
+	}
+	return nil
+}
+
 // uploadFile handles the file upload process
 func uploadFile(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Starting file upload")
@@ -360,6 +371,14 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 	// Check if a file was uploaded
 	if !foundFile {
 		http.Error(w, "No file uploaded", http.StatusBadRequest)
+		return
+	}
+
+	// Validate input data
+	if err := validateInput(oneTimeDownload, expiryDate, maxDownloads); err != nil {
+		tempFile.Close()
+		os.Remove(tempFilePath) // Clean up the temp file on error
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
