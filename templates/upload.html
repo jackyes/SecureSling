@@ -51,9 +51,9 @@
         <div class="card">
             <div class="card-body">
                 <div class="drag-drop-area mb-3" id="dragDropArea">
-                    <p id="fileNameDisplay"><i class="fas fa-cloud-upload-alt fa-2x"></i> <br> Drag & Drop your file here</p>
+                    <p id="fileNameDisplay"><i class="fas fa-cloud-upload-alt fa-2x" aria-label="Upload icon"></i> <br> Drag & Drop your file here</p>
                     <p>or</p>
-                    <button onclick="triggerFileInput()" id="selectFileButton" class="btn btn-primary btn-icon">
+                    <button onclick="triggerFileInput()" id="selectFileButton" class="btn btn-primary btn-icon" title="Click to select a file for upload">
                         <i class="fas fa-file-upload"></i> Select File
                     </button>
                     <input type="file" id="fileInput" class="form-control mb-3" style="display:none;" onchange="handleFileSelect(event)"  multiple/>
@@ -204,5 +204,24 @@
     <script src="main.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js" integrity="sha512-7Pi/otdlbbCR+LnW+F7PwFcSDJOuUJB3OxtEHbg4vSMvzvJjde4Po1v4BR9Gdc9aXNUNFVUY+SK51wWT8WF0Gg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script>
+    function validateAndSubmit(event) {
+        event.preventDefault();
+        
+        const files = document.getElementById('fileInput').files;
+        const password = document.getElementById('password').value;
+        const expiryDate = document.getElementById('expiryDate').value;
+        const maxDownloads = document.getElementById('maxDownloads').value;
+
+        if (validateInputs(files, password, expiryDate, maxDownloads)) {
+            // Se la validazione passa, procedi con l'upload
+            uploadFile();
+        }
+        
+        return false;
+    }
+
+    document.getElementById('uploadButton').addEventListener('click', validateAndSubmit);
+    </script>
 </body>
 </html>
