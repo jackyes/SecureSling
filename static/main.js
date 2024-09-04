@@ -22,8 +22,8 @@ async function encryptFile(file) {
         );
         return { encryptedContent, key, iv };
     } catch (error) {
-        console.error("Error during encryption:", error);
-        displayError("An error occurred during encryption.");
+        // console.error("Error during encryption:", error);  //
+        // displayError("An error occurred during encryption.");
         return null;
     }
 }
