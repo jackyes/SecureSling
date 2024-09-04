@@ -34,8 +34,8 @@ async function exportKey(key) {
         const exported = await crypto.subtle.exportKey("raw", key);
         return Array.from(new Uint8Array(exported));
     } catch (error) {
-        console.error("Error exporting key:", error);
-        displayError("An error occurred while exporting the key.");
+        //console.error("Error exporting key:", error);
+        //displayError("An error occurred while exporting the key.");
         return null;
     }
 }
