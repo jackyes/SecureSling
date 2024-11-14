@@ -301,14 +301,18 @@ async function generateKeyFromPassword(password, salt) {
 }
 
 // Function to encrypt file with password
+// Function to encrypt a file with a password
 async function encryptFileWithPassword(file, password) {
     if (!window.crypto || !window.crypto.subtle) {
         alert('Web Crypto API not supported. Please use a modern browser with HTTPS.');
         return;
     }
-   try {
+    try {
+        // Generate a key from the password
         const { key, salt } = await generateKeyFromPassword(password);
+        // Generate a random initialization vector
         const iv = crypto.getRandomValues(new Uint8Array(12));
+        // Encrypt the file content
         const encryptedContent = await crypto.subtle.encrypt(
             { name: 'AES-GCM', iv: iv },
             key,
@@ -316,8 +320,13 @@ async function encryptFileWithPassword(file, password) {
         );
         return { encryptedContent, key, iv, salt };
     } catch (err) {
-        console.error('Encryption with password error:', err);
-        displayError("An error occurred while encrypting the file with password.");
+        if (err instanceof DOMException) {
+            console.error('DOMException during encryption:', err);
+            displayError("An error occurred while encrypting the file with password.");
+        } else {
+            console.error('Error during encryption:', err);
+            displayError("An error occurred while encrypting the file with password.");
+        }
         return null;
     }
 }
@@ -340,13 +349,16 @@ function handleFileSelect(event) {
 }
 
 // Function to validate inputs
-function validateInputs(files, password, expiryDate, maxDownloads) {
-    if (files && files.length === 0) {
+function validateFiles(files) {
+    if (files.length === 0) {
         displayError('Please select a file or drag and drop a file.');
         console.log('No files selected.');
         return false;
     }
+    return true;
+}
 
+function validatePassword(password) {
     if (password !== null && password !== '') {
         const passwordStrength = checkPasswordStrength(password);
         if (passwordStrength < 3) {
@@ -354,18 +366,27 @@ function validateInputs(files, password, expiryDate, maxDownloads) {
             return false;
         }
     }
+    return true;
+}
 
+function validateExpiryDate(expiryDate) {
     if (expiryDate && new Date(expiryDate) <= new Date()) {
         displayError('Expiry date must be in the future.');
         return false;
     }
+    return true;
+}
 
+function validateMaxDownloads(maxDownloads) {
     if (maxDownloads && (!Number.isInteger(+maxDownloads) || +maxDownloads <= 0)) {
         displayError('Max downloads must be a positive integer.');
         return false;
     }
-
     return true;
+}
+
+function validateInputs(files, password, expiryDate, maxDownloads) {
+    return validateFiles(files) && validatePassword(password) && validateExpiryDate(expiryDate) && validateMaxDownloads(maxDownloads);
 }
 
 // Make validateInputs available globally
