@@ -10,5 +10,5 @@ UploadDir: "./uploads" # Set Upoads dir location
 ShowMenuDownloadPage: true # Show Menubar in downloadpage (if true add menu entry for index and upload page)
 # Configuration for login attempt rate limiting
 RateLimitPeriod: 60    # Time period (in seconds) for rate limiting login attempts
-RateLimitAttempts: 5   # Maximum number of login attempts allowed per IP during the specified period
+RateLimitAttempts: 10   # Maximum number of login attempts allowed per IP during the specified period
 
