@@ -272,12 +272,26 @@ func serveUploadPage(w http.ResponseWriter, r *http.Request) {
 }
 
 // validateInput checks if the input data is valid
-func validateInput(oneTimeDownload bool, expiryDate time.Time, maxDownloads int) error {
+func validateExpiryDate(expiryDate time.Time) error {
 	if expiryDate.Before(time.Now()) {
 		return fmt.Errorf("expiry date must be in the future")
 	}
+	return nil
+}
+
+func validateMaxDownloads(maxDownloads int) error {
 	if maxDownloads < 0 {
 		return fmt.Errorf("max downloads must be non-negative")
+	}
+	return nil
+}
+
+func validateInput(oneTimeDownload bool, expiryDate time.Time, maxDownloads int) error {
+	if err := validateExpiryDate(expiryDate); err != nil {
+		return err
+	}
+	if err := validateMaxDownloads(maxDownloads); err != nil {
+		return err
 	}
 	return nil
 }
