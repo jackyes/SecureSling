@@ -409,7 +409,7 @@ async function compressFiles(files) {
     for (let i = 0; i < files.length; i++) {
         zip.file(files[i].name, files[i]);
     }
-    return await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 9 } });
+    return await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 1 } });
 }
 
 // Event listener for drag and drop
