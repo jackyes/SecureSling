@@ -433,10 +433,8 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function base64UrlEncode(arrayBuffer) {
-    return btoa(String.fromCharCode.apply(null, new Uint8Array(arrayBuffer)))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
+    const encoded = btoa(new TextEncoder().encode(arrayBuffer));
+    return encoded.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 function base64UrlDecode(base64) {
