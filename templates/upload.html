@@ -41,25 +41,25 @@
             <h1>SecureSling</h1>
         </div>
         <div class="jumbotron text-center main-content">
-            <div class="hero-icon">
-                <i class="fas fa-file-upload fa-3x"></i>
-              </div>
+            <div class="hero-icon animated fadeIn delay-500ms">
+                <i class="fas fa-file-upload fa-2x"></i>
+            </div>
             <h1 class="display-4 animated fadeIn delay-500ms">Upload Your File</h1>
-            <p class="lead animated fadeIn delay-1000ms">Maximum file size: <span id="maxFileSize">{{ formatSize .MaxUploadSize }}</span></p>
-            <p class="lead animated fadeIn delay-1500ms">Maximum sharing time: <span id="maxTime">{{.MaxExpireDuration}}</span></p>
+            <p class="lead animated fadeIn delay-1000ms">Maximum file size: <span id="maxFileSize" class="badge bg-primary">{{ formatSize .MaxUploadSize }}</span></p>
+            <p class="lead animated fadeIn delay-1500ms">Maximum sharing time: <span id="maxTime" class="badge bg-primary">{{.MaxExpireDuration}}</span></p>
         </div>
         <div class="card">
             <div class="card-body">
-                <div class="drag-drop-area mb-3" id="dragDropArea">
-                    <p id="fileNameDisplay"><i class="fas fa-cloud-upload-alt fa-2x" aria-label="Upload icon"></i> <br> Drag & Drop your file here</p>
-                    <p>or</p>
+                <div class="drag-drop-area mb-4" id="dragDropArea">
+                    <p id="fileNameDisplay" class="mb-3"><i class="fas fa-cloud-upload-alt fa-3x" aria-label="Upload icon"></i> <br> Drag & Drop your file here</p>
+                    <div class="divider-text"><span>or</span></div>
                     <button onclick="triggerFileInput()" id="selectFileButton" class="btn btn-primary btn-icon" title="Click to select a file for upload">
                         <i class="fas fa-file-upload"></i> Select File
                     </button>
-                    <input type="file" id="fileInput" class="form-control mb-3" style="display:none;" onchange="handleFileSelect(event)"  multiple/>
+                    <input type="file" id="fileInput" class="form-control mb-3" style="display:none;" onchange="handleFileSelect(event)" multiple/>
                 </div>
-                <p id="selectedFileName" class="text-center mt-3"></p>
-                <button onclick="uploadFile()" id="uploadButton" class="btn btn-success btn-block mx-auto d-block mt-3 btn-icon">
+                <p id="selectedFileName" class="text-center mt-3 fw-bold text-primary"></p>
+                <button onclick="uploadFile()" id="uploadButton" class="btn btn-success btn-block mx-auto d-block mt-4 btn-icon">
                     <i class="fas fa-upload"></i> Upload File
                 </button>
                 <div class="progress mt-3 d-none" id="progressContainer">
@@ -75,7 +75,7 @@
                     </button>
                 </div>
                 <div id="errorMessage" class="alert alert-danger mt-3 d-none" role="alert"></div>
-                <div class="accordion mt-3 advanced-options" id="advancedOptions">
+                <div class="accordion mt-4 advanced-options" id="advancedOptions">
                     <div class="accordion-item">
                         <h2 class="accordion-header" id="headingOne">
                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
@@ -84,14 +84,17 @@
                         </h2>
                         <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#advancedOptions">
                             <div class="accordion-body">
-                                <div class="form-check mb-3">
+                                <div class="form-check mb-4">
                                     <input type="checkbox" id="oneTimeDownload" class="form-check-input">
                                     <label class="form-check-label" for="oneTimeDownload">
                                         <i class="fas fa-download me-2"></i> One-time download
                                     </label>
-                                    <small class="form-text text-muted">Allow the file to be downloaded only once.</small>
+                                    <small class="form-text text-muted d-block mt-1">
+                                        <i class="fas fa-info-circle me-1" style="color: var(--primary-color);"></i>
+                                        Allow the file to be downloaded only once.
+                                    </small>
                                 </div>
-                                <div id="passwordInputDiv" class="form-group mb-3">
+                                <div id="passwordInputDiv" class="form-group mb-4">
                                     <label for="password">
                                         <i class="fas fa-lock me-2"></i> Password (Optional)
                                     </label>
@@ -105,21 +108,30 @@
                                         <div id="strengthMeter"></div>
                                     </div>
                                     <small id="passwordStrength" class="form-text"></small>
-                                    <small class="form-text text-muted">Enter a password to encrypt the file. Remember the password, it will be needed for the download.</small>
+                                    <small class="form-text text-muted d-block mt-2">
+                                        <i class="fas fa-key me-1" style="color: var(--primary-color);"></i>
+                                        Enter a password to encrypt the file. Remember the password, it will be needed for the download.
+                                    </small>
                                 </div>
-                                <div class="form-group mb-3">
+                                <div class="form-group mb-4">
                                     <label for="expiryDate">
                                         <i class="fas fa-calendar-alt me-2"></i> Expiration Date
                                     </label>
                                     <input type="date" id="expiryDate" class="form-control">
-                                    <small class="form-text text-muted">Set a date after which the file will no longer be available for download.</small>
+                                    <small class="form-text text-muted d-block mt-1">
+                                        <i class="fas fa-calendar-check me-1" style="color: var(--primary-color);"></i>
+                                        Set a date after which the file will no longer be available for download.
+                                    </small>
                                 </div>
-                                <div class="form-group mb-3">
+                                <div class="form-group mb-4">
                                     <label for="maxDownloads">
                                         <i class="fas fa-sort-numeric-up me-2"></i> Max Downloads
                                     </label>
                                     <input type="number" id="maxDownloads" class="form-control" min="1">
-                                    <small class="form-text text-muted">Specify the maximum number of times the file can be downloaded.</small>
+                                    <small class="form-text text-muted d-block mt-1">
+                                        <i class="fas fa-sort-numeric-down me-1" style="color: var(--primary-color);"></i>
+                                        Specify the maximum number of times the file can be downloaded.
+                                    </small>
                                 </div>
                             </div>
                         </div>

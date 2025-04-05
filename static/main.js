@@ -433,18 +433,36 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function base64UrlEncode(arrayBuffer) {
-    const encoded = btoa(new TextEncoder().encode(arrayBuffer));
-    return encoded.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    // Convert the array buffer to a regular array of bytes
+    const bytes = new Uint8Array(arrayBuffer);
+    // Convert bytes to a binary string
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    // Base64 encode the binary string
+    const base64 = btoa(binary);
+    // Make the base64 string URL-safe
+    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 function base64UrlDecode(base64) {
-    base64 = base64
-        .replace(/-/g, '+')
-        .replace(/_/g, '/');
+    base64 = base64.replace(/-/g, '+').replace(/_/g, '/');
     while (base64.length % 4) {
         base64 += '=';
     }
-    return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    try {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+    } catch (error) {
+        console.error("Error decoding base64:", error);
+        displayError("Error decoding the download link. The link may be corrupted.");
+        throw error;
+    }
 }
 
 // Function to download a file
@@ -529,6 +547,9 @@ async function downloadFile() {
 
 async function startFileDownload(fileID, decryptionKey, iv, filename, statusMessage, downloadedBytesElement, progressBar, progressContainer, downloadButton) {
     try {
+        console.log("Decryption Key:", decryptionKey);
+        console.log("IV:", iv);
+
         progressContainer.classList.remove('d-none');
         progressBar.style.width = '0%';
         progressBar.textContent = '0%';
@@ -643,32 +664,45 @@ async function decryptFile(encryptedContent, key, iv) {
             key,
             encryptedContent
         );
+
+        if (!decryptedContent) {
+            console.error("Decryption returned null or undefined content.");
+            displayError("Decryption failed: The decrypted content is invalid.");
+            throw new Error("Decryption failed: The decrypted content is invalid.");
+        }
+
         return new Blob([decryptedContent]);
     } catch (error) {
-        console.error("Decryption failed or data integrity check failed:", error);
-        displayError("An error occurred during decryption. This may be due to a decryption failure or a data integrity check failure.");
-        throw new Error("Decryption failed or data integrity check failed.");
+        console.error("Decryption failed:", error);
+        let errorMessage = "An error occurred during decryption.";
+
+        if (error instanceof DOMException) {
+            switch (error.name) {
+                case "InvalidAccessError":
+                    errorMessage = "Decryption failed: Invalid key or IV.";
+                    break;
+                case "OperationError":
+                    errorMessage = "Decryption failed: Data integrity check failed (invalid password or corrupted data).";
+                    break;
+                default:
+                    errorMessage = `Decryption failed: ${error.message}`;
+            }
+        }
+
+        displayError(errorMessage);
+        throw new Error("Decryption failed");
     }
 }
 
 // Event listeners
-document.getElementById('uploadButton').addEventListener('click', uploadFile);
-document.getElementById('fileInput').addEventListener('change', (event) => {
-    const fileNames = Array.from(event.target.files).map(file => file.name).join(', ');
-    document.getElementById('selectedFileName').textContent = fileNames;
+document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById('uploadButton').addEventListener('click', uploadFile);
+    document.getElementById('fileInput').addEventListener('change', (event) => {
+        const fileNames = Array.from(event.target.files).map(file => file.name).join(', ');
+        document.getElementById('selectedFileName').textContent = fileNames;
+    });
 });
 
-// Function to verify file integrity
-async function verifyFileIntegrity(originalFile, decryptedFile) {
-    const originalHash = await crypto.subtle.digest('SHA-256', await originalFile.arrayBuffer());
-    const decryptedHash = await crypto.subtle.digest('SHA-256', await decryptedFile.arrayBuffer());
-    
-    if (originalHash.byteLength !== decryptedHash.byteLength) {
-        return false;
-    }
-    
-    return crypto.subtle.timingSafeEqual(new Uint8Array(originalHash), new Uint8Array(decryptedHash));
-}
 // Function to validate and sanitize input
 function validateInput(input, type = 'text') {
     if (typeof input !== 'string') {

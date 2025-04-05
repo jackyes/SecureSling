@@ -43,10 +43,13 @@
                 <img src="/share/logo.webp" alt="Logo">
             <h1>SecureSling</h1>
             </div>
+            <div class="hero-icon animated fadeIn delay-500ms">
+                <i class="fas fa-shield-alt fa-2x"></i>
+            </div>
             <p class="lead animated fadeIn delay-500ms">Easily and securely share your files with client-side encryption.</p>
             <hr class="my-4">
             <p class="animated fadeIn delay-1000ms">SecureSling ensures your files are protected during upload and download with advanced encryption techniques.</p>
-            <a class="btn btn-success btn-xl d-inline-block mt-3 btn-icon animated fadeIn delay-1000ms" href="upload.html" role="button">
+            <a class="btn btn-success btn-xl d-inline-block mt-4 btn-icon animated fadeIn delay-1000ms" href="upload.html" role="button">
                 <i class="fas fa-upload"></i> Get Started
             </a>
         </div>
@@ -57,6 +60,9 @@
                     <div class="card-body">
                         <h5 class="card-title"><i class="fas fa-user-friends"></i> Easy to Use</h5>
                         <p class="card-text">The intuitive interface makes file sharing simple and straightforward.</p>
+                        <div class="text-center mt-4">
+                            <i class="fas fa-mouse-pointer fa-2x" style="color: var(--primary-color);"></i>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -67,6 +73,9 @@
                         <p class="card-text">
                             Files are encrypted with AES-GCM using a 256-bit key to ensure data privacy and security. This state-of-the-art encryption standard provides robust protection for your files.
                         </p>
+                        <div class="text-center mt-3">
+                            <i class="fas fa-lock fa-2x" style="color: var(--primary-color);"></i>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -75,6 +84,9 @@
                     <div class="card-body">
                         <h5 class="card-title"><i class="fas fa-download"></i> One-Time Downloads</h5>
                         <p class="card-text">Enable one-time downloads to ensure your files are accessed only once.</p>
+                        <div class="text-center mt-4">
+                            <i class="fas fa-hourglass-end fa-2x" style="color: var(--primary-color);"></i>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -83,22 +95,27 @@
         <div class="row mt-5">
             <div class="col-md-8 offset-md-2">
                 <div class="card animated fadeIn delay-2000ms">
+                    <div class="card-header text-center">
+                        <h4 class="mb-0"><i class="fas fa-lock me-2"></i>Client-Side Encryption</h4>
+                    </div>
                     <div class="card-body">
-                        <h5 class="card-title"><i class="fas fa-lock"></i> Client-Side Encryption</h5>
                         <p class="card-text">
                             With this service, your files are encrypted and decrypted directly on your device. This means that only you and the recipient can access the content of the files. The server never has access to your unencrypted files, ensuring maximum privacy and security.
                         </p>
-                        <p class="card-text">
-                            Here’s how it works:
+                        <div class="process-steps my-4">
+                            <h6 class="mb-3">Here's how it works:</h6>
                             <ul>
                                 <li>Before uploading, your files are encrypted using AES-GCM with a 256-bit key, a state-of-the-art encryption standard.</li>
                                 <li>Only the encrypted version of your files is uploaded to the server.</li>
                                 <li>When downloading, the encrypted files are decrypted on your device using the decryption key you provided.</li>
                             </ul>
-                        </p>
-                        <p class="card-text">
-                            This client-side encryption model guarantees that your data remains private and secure, as it is never exposed to the server in an unencrypted form. You can trust that your sensitive information is safe with SecureSling.
-                        </p>
+                        </div>
+                        <div class="card bg-light p-3 mb-0 mt-3">
+                            <p class="card-text mb-0">
+                                <i class="fas fa-info-circle me-2" style="color: var(--primary-color);"></i>
+                                This client-side encryption model guarantees that your data remains private and secure, as it is never exposed to the server in an unencrypted form. You can trust that your sensitive information is safe with SecureSling.
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
