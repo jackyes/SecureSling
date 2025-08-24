@@ -1,0 +1,408 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="SecureSling Help Center - Comprehensive guide for using SecureSling file sharing service with end-to-end encryption">
+    <title>SecureSling - Help Center</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" integrity="sha512-jnSuA4Ss2PkkikSOLtYs8BlYIeeIK1h99ty4YfvRPAlzr377vr3CXDb7sb7eEEBYjDtcYj+AjBH3FLv5uSJuXg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <!-- Early theme bootstrap to prevent flash of incorrect theme -->
+    <meta name="color-scheme" content="light dark">
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('theme');
+          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var isDark = saved ? (saved === 'dark') : prefersDark;
+          if (isDark) { document.documentElement.classList.add('dark-mode'); }
+        } catch (e) {}
+      })();
+    </script>
+
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;700&display=swap" referrerpolicy="no-referrer">
+    <link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/share/favicon-16x16.png">
+    <link rel="manifest" href="/share/site.webmanifest">
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <nav class="navbar fixed-top navbar-light">
+        <div class="container">
+            <a class="navbar-brand fs-3" href="index.html"><img src="/share/logo.webp" alt="Logo" style="height: 30px; margin-right: 10px;">SecureSling</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" aria-current="page" href="index.html">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="upload.html">Upload</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="download.html">Download</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="help.html">Help</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    <button class="dark-mode-toggle" id="darkModeToggle" aria-label="Toggle dark mode">
+        <i class="fas fa-moon"></i>
+    </button>
+
+    <div class="container mt-5" id="main-content" tabindex="-1">
+        <div class="jumbotron text-center main-content">
+            <div class="hero-icon">
+                <i class="fas fa-question-circle fa-2x"></i>
+            </div>
+            <h1 class="display-4">Help Center</h1>
+            <p class="lead">Comprehensive guide to using SecureSling's secure file sharing service</p>
+        </div>
+
+        <!-- Quick Navigation -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-compass me-2"></i>Quick Navigation</h5>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="#getting-started" class="btn btn-outline-primary btn-sm">Getting Started</a>
+                    <a href="#upload-guide" class="btn btn-outline-primary btn-sm">Upload Guide</a>
+                    <a href="#download-guide" class="btn btn-outline-primary btn-sm">Download Guide</a>
+                    <a href="#security" class="btn btn-outline-primary btn-sm">Security</a>
+                    <a href="#troubleshooting" class="btn btn-outline-primary btn-sm">Troubleshooting</a>
+                    <a href="#faq" class="btn btn-outline-primary btn-sm">FAQ</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Getting Started -->
+        <div class="card mb-4" id="getting-started">
+            <div class="card-header">
+                <h4><i class="fas fa-rocket me-2"></i>Getting Started</h4>
+            </div>
+            <div class="card-body">
+                <h5>Welcome to SecureSling!</h5>
+                <p>SecureSling is a secure file sharing service that uses end-to-end encryption to protect your files. Here's what you need to know:</p>
+                
+                <div class="row mt-4">
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-upload fa-3x mb-3 text-primary"></i>
+                                <h6>Upload Files</h6>
+                                <p class="small">Encrypt and upload files with optional password protection</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-download fa-3x mb-3 text-success"></i>
+                                <h6>Download Files</h6>
+                                <p class="small">Download files using secure links and decryption keys</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mt-4">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Important:</strong> All encryption and decryption happens in your browser. The server never sees your unencrypted files.
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Guide -->
+        <div class="card mb-4" id="upload-guide">
+            <div class="card-header">
+                <h4><i class="fas fa-upload me-2"></i>Upload Guide</h4>
+            </div>
+            <div class="card-body">
+                <h5>Step-by-Step Upload Process</h5>
+                
+                <div class="row mt-4">
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <div class="badge bg-primary rounded-circle p-2 mb-2 mx-auto" style="width: 40px; height: 40px; line-height: 26px;">1</div>
+                                <h6>Select File</h6>
+                                <p class="small">Drag and drop or click to select your file</p>
+                                <i class="fas fa-file text-muted"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <div class="badge bg-primary rounded-circle p-2 mb-2 mx-auto" style="width: 40px; height: 40px; line-height: 26px;">2</div>
+                                <h6>Set Options</h6>
+                                <p class="small">Configure security settings (optional)</p>
+                                <i class="fas fa-cog text-muted"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <div class="badge bg-primary rounded-circle p-2 mb-2 mx-auto" style="width: 40px; height: 40px; line-height: 26px;">3</div>
+                                <h6>Upload & Share</h6>
+                                <p class="small">Upload and copy the secure link</p>
+                                <i class="fas fa-share-alt text-muted"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <h6 class="mt-4">Advanced Options Explained</h6>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Option</th>
+                                <th>Description</th>
+                                <th>Recommendation</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Password</strong></td>
+                                <td>Encrypts file with AES-256 encryption</td>
+                                <td>Always use for sensitive files</td>
+                            </tr>
+                            <tr>
+                                <td><strong>One-time Download</strong></td>
+                                <td>File can only be downloaded once</td>
+                                <td>Use for maximum security</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Expiration Date</strong></td>
+                                <td>Automatic file deletion after date</td>
+                                <td>Set reasonable timeframe</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Max Downloads</strong></td>
+                                <td>Limit number of downloads</td>
+                                <td>Use for controlled sharing</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Download Guide -->
+        <div class="card mb-4" id="download-guide">
+            <div class="card-header">
+                <h4><i class="fas fa-download me-2"></i>Download Guide</h4>
+            </div>
+            <div class="card-body">
+                <h5>Downloading Files</h5>
+                <p>To download a file shared with you:</p>
+                
+                <ol>
+                    <li>Click on the secure download link provided by the sender</li>
+                    <li>If the file was encrypted, enter the password (ask the sender if you don't have it)</li>
+                    <li>Click "Download File" to decrypt and download</li>
+                    <li>For one-time downloads, the file will be deleted after your download</li>
+                </ol>
+
+                <div class="alert alert-warning mt-3">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Note:</strong> If you lose the password, the file cannot be recovered. Always keep passwords secure.
+                </div>
+            </div>
+        </div>
+
+        <!-- Security Section -->
+        <div class="card mb-4" id="security">
+            <div class="card-header">
+                <h4><i class="fas fa-shield-alt me-2"></i>Security & Privacy</h4>
+            </div>
+            <div class="card-body">
+                <h5>How SecureSling Protects Your Files</h5>
+                
+                <div class="row mt-4">
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6><i class="fas fa-lock me-2 text-success"></i>End-to-End Encryption</h6>
+                                <ul class="small">
+                                    <li>AES-GCM 256-bit encryption</li>
+                                    <li>Encryption happens in your browser</li>
+                                    <li>Server only stores encrypted files</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6><i class="fas fa-user-shield me-2 text-primary"></i>Privacy Features</h6>
+                                <ul class="small">
+                                    <li>No file content access by server</li>
+                                    <li>One-time download option</li>
+                                    <li>Automatic file expiration</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <h6 class="mt-4">Security Best Practices</h6>
+                <ul>
+                    <li>Use strong, unique passwords for each file</li>
+                    <li>Enable one-time download for sensitive files</li>
+                    <li>Set reasonable expiration dates</li>
+                    <li>Share download links securely (e.g., encrypted messaging)</li>
+                    <li>Verify the recipient's identity before sharing sensitive files</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Troubleshooting -->
+        <div class="card mb-4" id="troubleshooting">
+            <div class="card-header">
+                <h4><i class="fas fa-wrench me-2"></i>Troubleshooting</h4>
+            </div>
+            <div class="card-body">
+                <h5>Common Issues and Solutions</h5>
+                
+                <div class="accordion" id="troubleshootingAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#trouble1">
+                                File Upload Fails
+                            </button>
+                        </h2>
+                        <div id="trouble1" class="accordion-collapse collapse show">
+                            <div class="accordion-body">
+                                <ul>
+                                    <li>Check file size limits</li>
+                                    <li>Verify internet connection</li>
+                                    <li>Try a different browser</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#trouble2">
+                                Download Not Working
+                            </button>
+                        </h2>
+                        <div id="trouble2" class="accordion-collapse collapse">
+                            <div class="accordion-body">
+                                <ul>
+                                    <li>Verify the download link is correct</li>
+                                    <li>Check if file has expired</li>
+                                    <li>Confirm download limit hasn't been reached</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#trouble3">
+                                Password Issues
+                            </button>
+                        </h2>
+                        <div id="trouble3" class="accordion-collapse collapse">
+                            <div class="accordion-body">
+                                <ul>
+                                    <li>Ensure correct password is entered</li>
+                                    <li>Check for caps lock</li>
+                                    <li>Contact the file sender for verification</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FAQ -->
+        <div class="card mb-4" id="faq">
+            <div class="card-header">
+                <h4><i class="fas fa-question-circle me-2"></i>Frequently Asked Questions</h4>
+            </div>
+            <div class="card-body">
+                <div class="accordion" id="faqAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                                Is SecureSling really secure?
+                            </button>
+                        </h2>
+                        <div id="faq1" class="accordion-collapse collapse show">
+                            <div class="accordion-body">
+                                Yes! Files are encrypted with AES-256 encryption before leaving your browser. The server never sees unencrypted file content.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                                What's the maximum file size?
+                            </button>
+                        </h2>
+                        <div id="faq2" class="accordion-collapse collapse">
+                            <div class="accordion-body">
+                                The maximum file size is displayed on the upload page and is typically several gigabytes, depending on server configuration.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                                Can I recover a lost password?
+                            </button>
+                        </h2>
+                        <div id="faq3" class="accordion-collapse collapse">
+                            <div class="accordion-body">
+                                No. Passwords are not stored on the server. If you lose the password, the encrypted file cannot be recovered.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Support Contact -->
+        <div class="card">
+            <div class="card-header">
+                <h4><i class="fas fa-headset me-2"></i>Need More Help?</h4>
+            </div>
+            <div class="card-body">
+                <p class="mb-2">Visit our GitHub repository for issues and feature requests.</p>
+                <a href="https://github.com/jackyes/SecureSling/issues" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary btn-icon">
+                    <i class="fas fa-external-link-alt"></i> Open Issues
+                </a>
+            </div>
+        </div>
+    </div>
+ 
+    <footer class="footer mt-5 py-3">
+        <div class="container text-center">
+            <span class="text-muted">SecureSling Help Center</span>
+            <i class="fab fa-github github-logo"></i>
+            <a href="https://github.com/jackyes/SecureSling" target="_blank" rel="noopener noreferrer"
+               aria-label="Visit SecureSling GitHub repository">
+                GitHub
+            </a>
+            <span class="mx-2">•</span>
+            <a href="index.html" class="text-decoration-none">Home</a>
+        </div>
+    </footer>
+ 
+    <script src="main.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js" integrity="sha512-7Pi/otdlbbCR+LnW+F7PwFcSDJOuUJB3OxtEHbg4vSMvzvJjde4Po1v4BR9Gdc9aXNUNFVUY+SK51wWT8WF0Gg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</body>
+</html>

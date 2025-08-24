@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -22,12 +24,16 @@ import (
 )
 
 const (
-	bufferSize = 10 * 1024 * 1024 // 10MB buffer size
+	bufferSize      = 16 * 1024 * 1024 // 16MB buffer size (optimized for modern systems)
+	maxFileIDLength = 100
 )
 
 var (
 	AppConfig    Cfg
 	rateLimiters = make(map[string]*rate.Limiter)
+	// Template caching for better performance
+	uploadTemplate   *template.Template
+	downloadTemplate *template.Template
 )
 
 type UserCredentials struct {
@@ -48,6 +54,8 @@ type Cfg struct {
 	UploadDir            string `yaml:"UploadDir"`
 	RateLimitPeriod      int    `yaml:"RateLimitPeriod"`
 	RateLimitAttempts    int    `yaml:"RateLimitAttempts"`
+	RequireHTTPS         *bool  `yaml:"RequireHTTPS"`
+	AllowInsecureHTTP    *bool  `yaml:"AllowInsecureHTTP"`
 }
 
 // FileInfo stores metadata about uploaded files
@@ -100,6 +108,42 @@ func readUserCredentials(filePath string) ([]UserCredentials, error) {
 	return credentials, nil
 }
 
+// Middleware to add security headers
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set security headers
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+
+		// Only set HSTS if TLS is enabled
+		if AppConfig.EnableTLS {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Middleware to redirect HTTP to HTTPS
+func httpsRedirect(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check if HTTPS redirection is enabled and required
+		requireHTTPS := AppConfig.RequireHTTPS != nil && *AppConfig.RequireHTTPS
+		allowInsecure := AppConfig.AllowInsecureHTTP != nil && *AppConfig.AllowInsecureHTTP
+
+		if AppConfig.EnableTLS && requireHTTPS && !allowInsecure && r.TLS == nil {
+			// Redirect to HTTPS
+			httpsURL := "https://" + r.Host + r.URL.String()
+			http.Redirect(w, r, httpsURL, http.StatusMovedPermanently)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 // Middleware to add cache headers
 func cacheMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -111,6 +155,22 @@ func cacheMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// Validate file ID to prevent path traversal attacks
+func isValidFileID(fileID string) bool {
+	if fileID == "" || len(fileID) > maxFileIDLength {
+		return false
+	}
+	// Allow dot in fileID (e.g., upload-12345.enc), still prevent path traversal (no slashes)
+	validFileIDRegex := regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+	return validFileIDRegex.MatchString(fileID)
+}
+
+// Secure error handling function
+func handleError(w http.ResponseWriter, logMessage string, userMessage string, status int) {
+	log.Printf("Error: %s", logMessage)
+	http.Error(w, userMessage, status)
+}
+
 // Get Client ip from X-Forwarded-For header if exist
 func getClientIP(r *http.Request) string {
 	// Read the IP from the X-Forwarded-For header, if it exists
@@ -119,10 +179,31 @@ func getClientIP(r *http.Request) string {
 		// X-Forwarded-For can contain a comma-separated list of IP addresses
 		// Take the first IP address in the list
 		parts := strings.Split(forwarded, ",")
-		return strings.TrimSpace(parts[0])
+		ip := strings.TrimSpace(parts[0])
+
+		// Basic validation to prevent IP spoofing
+		if isValidIP(ip) {
+			return ip
+		}
 	}
 	// Otherwise, return the remote IP address
 	return r.RemoteAddr
+}
+
+// Basic IP validation to prevent spoofing
+func isValidIP(ip string) bool {
+	// Simple validation - check if it looks like an IP address
+	// In production, you might want more robust validation
+	if ip == "" || strings.Contains(ip, " ") || strings.Contains(ip, "\n") {
+		return false
+	}
+
+	// Check for IPv4 or IPv6 patterns
+	if strings.Contains(ip, ":") || strings.Contains(ip, ".") {
+		return true
+	}
+
+	return false
 }
 
 // basicAuth is a middleware function that implements basic authentication
@@ -193,7 +274,7 @@ func validateCredentials(username, password string) bool {
 
 	credentials, err := readUserCredentials(credentialsPath)
 	if err != nil {
-		fmt.Println("Error reading credentials file:", err)
+		log.Printf("Error reading credentials file: %v", err)
 		return false
 	}
 
@@ -239,17 +320,32 @@ func formatDuration(hours int) string {
 	return strings.Join(durationParts, " ")
 }
 
+// initTemplates initializes and caches templates for better performance
+func initTemplates() error {
+	// Load upload template
+	tmplPath := filepath.Join("templates", "upload.html")
+	tmpl := template.New("").Funcs(template.FuncMap{
+		"formatSize": formatSize,
+	})
+
+	var err error
+	uploadTemplate, err = tmpl.ParseFiles(tmplPath)
+	if err != nil {
+		return fmt.Errorf("error parsing upload template: %v", err)
+	}
+
+	// Load download template
+	tmplPath = filepath.Join("templates", "download.html")
+	downloadTemplate, err = template.ParseFiles(tmplPath)
+	if err != nil {
+		return fmt.Errorf("error parsing download template: %v", err)
+	}
+
+	return nil
+}
+
 // serveUploadPage serves the upload page template
 func serveUploadPage(w http.ResponseWriter, r *http.Request) {
-	// Construct the path to the upload.html template
-	tmplPath := filepath.Join("templates", "upload.html")
-
-	// Create a new template with a custom function map
-	tmpl := template.Must(template.New("").Funcs(template.FuncMap{
-		// Register a custom function to format file sizes
-		"formatSize": formatSize,
-	}).ParseFiles(tmplPath))
-
 	// Calculate the maximum expiry duration as a string
 	maxExpireDuration := formatDuration(AppConfig.MaxExpireHours)
 
@@ -258,16 +354,13 @@ func serveUploadPage(w http.ResponseWriter, r *http.Request) {
 		MaxUploadSize     int64
 		MaxExpireDuration string
 	}{
-		// Set the maximum upload size from the AppConfig
-		MaxUploadSize: AppConfig.MaxUploadSize,
-		// Set the maximum expiry duration as a string
+		MaxUploadSize:     AppConfig.MaxUploadSize,
 		MaxExpireDuration: maxExpireDuration,
 	}
 
-	// Execute the template with the data
-	if err := tmpl.ExecuteTemplate(w, "upload.html", data); err != nil {
-		// If there's an error executing the template, return an error response
-		http.Error(w, "Error executing template: "+err.Error(), http.StatusInternalServerError)
+	// Execute the cached template with the data
+	if err := uploadTemplate.ExecuteTemplate(w, "upload.html", data); err != nil {
+		handleError(w, "Error executing template: "+err.Error(), "Internal server error", http.StatusInternalServerError)
 	}
 }
 
@@ -305,7 +398,7 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 	// Create a multipart reader to read the request body
 	reader, err := r.MultipartReader()
 	if err != nil {
-		http.Error(w, "Error reading multipart data", http.StatusInternalServerError)
+		handleError(w, "Error reading multipart data: "+err.Error(), "Error processing request", http.StatusInternalServerError)
 		return
 	}
 
@@ -327,7 +420,7 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 			break // No more parts to read
 		}
 		if err != nil {
-			http.Error(w, "Error reading multipart data", http.StatusInternalServerError)
+			handleError(w, "Error reading multipart data: "+err.Error(), "Error processing request", http.StatusInternalServerError)
 			return
 		}
 
@@ -336,7 +429,7 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 			// Create a temporary file to store the uploaded file
 			tempFile, err = os.CreateTemp(AppConfig.UploadDir, "upload-*.enc")
 			if err != nil {
-				http.Error(w, "Error creating temporary file", http.StatusInternalServerError)
+				handleError(w, "Error creating temporary file: "+err.Error(), "Error processing file", http.StatusInternalServerError)
 				return
 			}
 			tempFilePath = tempFile.Name() // Keep track of the file path
@@ -347,7 +440,7 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				tempFile.Close()
 				os.Remove(tempFilePath) // Clean up the temp file on error
-				http.Error(w, "Error writing to temporary file", http.StatusInternalServerError)
+				handleError(w, "Error writing to temporary file: "+err.Error(), "Error processing file", http.StatusInternalServerError)
 				return
 			}
 
@@ -365,7 +458,7 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				tempFile.Close()
 				os.Remove(tempFilePath) // Clean up the temp file on error
-				http.Error(w, "Invalid date format. Use YYYY-MM-DD.", http.StatusBadRequest)
+				handleError(w, "Invalid date format: "+buf.String(), "Invalid date format. Use YYYY-MM-DD.", http.StatusBadRequest)
 				return
 			}
 		} else if part.FormName() == "maxDownloads" {
@@ -376,7 +469,7 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				tempFile.Close()
 				os.Remove(tempFilePath) // Clean up the temp file on error
-				http.Error(w, "Invalid max downloads value", http.StatusBadRequest)
+				handleError(w, "Invalid max downloads value: "+buf.String(), "Invalid max downloads value", http.StatusBadRequest)
 				return
 			}
 		}
@@ -384,7 +477,7 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 
 	// Check if a file was uploaded
 	if !foundFile {
-		http.Error(w, "No file uploaded", http.StatusBadRequest)
+		handleError(w, "No file uploaded", "No file uploaded", http.StatusBadRequest)
 		return
 	}
 
@@ -392,7 +485,7 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 	if err := validateInput(oneTimeDownload, expiryDate, maxDownloads); err != nil {
 		tempFile.Close()
 		os.Remove(tempFilePath) // Clean up the temp file on error
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		handleError(w, "Validation error: "+err.Error(), err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -411,7 +504,7 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		tempFile.Close()
 		os.Remove(tempFilePath) // Clean up the temp file on error
-		http.Error(w, "Error creating info file", http.StatusInternalServerError)
+		handleError(w, "Error creating info file: "+err.Error(), "Error processing file", http.StatusInternalServerError)
 		return
 	}
 	defer infoFile.Close()
@@ -421,7 +514,7 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 		tempFile.Close()
 		os.Remove(tempFilePath)                                                // Clean up the temp file on error
 		os.Remove(filepath.Join(AppConfig.UploadDir, fileInfo.FileID+".json")) // Clean up the JSON file on error
-		http.Error(w, "Error encoding JSON file", http.StatusInternalServerError)
+		handleError(w, "Error encoding JSON file: "+err.Error(), "Error processing file", http.StatusInternalServerError)
 		return
 	}
 
@@ -431,7 +524,7 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 		tempFile.Close()
 		os.Remove(tempFilePath)                                                // Clean up the temp file on error
 		os.Remove(filepath.Join(AppConfig.UploadDir, fileInfo.FileID+".json")) // Clean up the JSON file on error
-		http.Error(w, "Error creating JSON response", http.StatusInternalServerError)
+		handleError(w, "Error creating JSON response: "+err.Error(), "Error processing file", http.StatusInternalServerError)
 		return
 	}
 
@@ -446,12 +539,18 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	fileID := vars["fileID"]
 
+	// Validate file ID to prevent path traversal attacks
+	if !isValidFileID(fileID) {
+		handleError(w, "Invalid file ID format: "+fileID, "Invalid file ID", http.StatusBadRequest)
+		return
+	}
+
 	// Open and decode file info
 	infoFilePath := filepath.Join(AppConfig.UploadDir, fileID+".json")
 	infoFile, err := os.Open(infoFilePath)
 	if err != nil {
 		// If the file is not found, return a 404 error
-		http.Error(w, "File not found", http.StatusNotFound)
+		handleError(w, "File not found: "+fileID, "File not found", http.StatusNotFound)
 		return
 	}
 
@@ -460,7 +559,7 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 	infoFile.Close() // Ensure the file is closed before attempting to delete
 	if err != nil {
 		// If there's an error decoding the JSON, return a 500 error
-		http.Error(w, "Error reading file info", http.StatusInternalServerError)
+		handleError(w, "Error reading file info: "+err.Error(), "Error processing file", http.StatusInternalServerError)
 		return
 	}
 
@@ -468,14 +567,14 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 	if fileInfo.ExpiryDate.Before(time.Now()) {
 		// If the file has expired, delete it and return a 410 error
 		deleteFileAndMetadata(filepath.Join(AppConfig.UploadDir, fileID), infoFilePath)
-		http.Error(w, "File has expired", http.StatusGone)
+		handleError(w, "File has expired: "+fileID, "File has expired", http.StatusGone)
 		return
 	}
 
 	// Check if the file has reached the maximum number of downloads
 	if fileInfo.MaxDownloads > 0 && fileInfo.Downloads >= fileInfo.MaxDownloads {
 		// If the file has reached the maximum number of downloads, return a 410 error
-		http.Error(w, "File has reached the maximum number of downloads", http.StatusGone)
+		handleError(w, "File has reached maximum downloads: "+fileID, "File has reached the maximum number of downloads", http.StatusGone)
 		return
 	}
 
@@ -485,7 +584,7 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 	infoFile, err = os.Create(infoFilePath)
 	if err != nil {
 		// If there's an error updating the info file, return a 500 error
-		http.Error(w, "Error updating info file", http.StatusInternalServerError)
+		handleError(w, "Error updating info file: "+err.Error(), "Error processing file", http.StatusInternalServerError)
 		return
 	}
 	json.NewEncoder(infoFile).Encode(&fileInfo)
@@ -496,7 +595,7 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		// If the file is not found, return a 404 error
-		http.Error(w, "File not found", http.StatusNotFound)
+		handleError(w, "File not found: "+filePath, "File not found", http.StatusNotFound)
 		return
 	}
 	defer file.Close()
@@ -505,7 +604,7 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 	fileStat, err := file.Stat()
 	if err != nil {
 		// If there's an error getting file info, return a 500 error
-		http.Error(w, "Error getting file info", http.StatusInternalServerError)
+		handleError(w, "Error getting file info: "+err.Error(), "Error processing file", http.StatusInternalServerError)
 		return
 	}
 
@@ -522,7 +621,7 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 			// If there's an error reading the file, return a 500 error
-			http.Error(w, "Error reading file", http.StatusInternalServerError)
+			handleError(w, "Error reading file: "+err.Error(), "Error processing file", http.StatusInternalServerError)
 			return
 		}
 		if n > 0 {
@@ -543,43 +642,44 @@ func deleteOldFiles() {
 	// Read the contents of the uploads directory
 	files, err := os.ReadDir(AppConfig.UploadDir)
 	if err != nil {
-		// If there's an error reading the directory, print a message and exit
 		fmt.Println("Error reading upload directory:", err)
 		return
 	}
 
-	// Iterate over each file in the directory
+	// Batch processing for better performance
+	const batchSize = 100
+	var batchCount int
+
 	for _, file := range files {
 		// Check if the file is a JSON file (metadata file)
 		if filepath.Ext(file.Name()) == ".json" {
-			// Construct the full path to the metadata file
 			infoFilePath := filepath.Join(AppConfig.UploadDir, file.Name())
-			// Open the metadata file
-			infoFile, err := os.Open(infoFilePath)
+
+			// Read file content once and parse
+			content, err := os.ReadFile(infoFilePath)
 			if err != nil {
-				// If there's an error opening the file, print a message and skip to the next file
-				fmt.Println("Error opening info file:", err)
+				fmt.Println("Error reading info file:", err)
 				continue
 			}
 
-			// Decode the JSON data into a FileInfo struct
 			var fileInfo FileInfo
-			err = json.NewDecoder(infoFile).Decode(&fileInfo)
-			// Ensure the file is closed before attempting to delete
-			infoFile.Close()
-			if err != nil {
-				// If there's an error decoding the JSON, print a message and skip to the next file
+			if err := json.Unmarshal(content, &fileInfo); err != nil {
 				fmt.Println("Error decoding info file:", err)
 				continue
 			}
 
 			// Check if the file has expired
 			if time.Now().After(fileInfo.ExpiryDate) {
-				// Construct the full path to the file
 				filePath := filepath.Join(AppConfig.UploadDir, fileInfo.FileID)
-				// Delete the file and its metadata
 				deleteFileAndMetadata(filePath, infoFilePath)
 				fmt.Println("Deleted expired file:", fileInfo.FileID)
+
+				// Process in batches to avoid overwhelming the system
+				batchCount++
+				if batchCount >= batchSize {
+					time.Sleep(100 * time.Millisecond) // Small delay between batches
+					batchCount = 0
+				}
 			}
 		}
 	}
@@ -641,36 +741,42 @@ func ReadConfig() {
 		defaultValue := true
 		AppConfig.ShowMenuDownloadPage = &defaultValue
 	}
+	// Set default values for HTTPS settings
+	if AppConfig.RequireHTTPS == nil {
+		defaultRequireHTTPS := true
+		AppConfig.RequireHTTPS = &defaultRequireHTTPS
+	}
+	if AppConfig.AllowInsecureHTTP == nil {
+		defaultAllowInsecure := false
+		AppConfig.AllowInsecureHTTP = &defaultAllowInsecure
+	}
 }
 
 func serveDownloadPage(w http.ResponseWriter, r *http.Request) {
-	// Construct the path to the download.html template
-	tmplPath := filepath.Join("templates", "download.html")
-
-	// Create a new template with a custom function map
-	tmpl := template.Must(template.New("").ParseFiles(tmplPath))
-
 	// Create a struct to hold data for the template
 	data := struct {
 		ShowUploadBox        bool
 		ShowMenuDownloadPage bool
 	}{
-		// Set the ShowUploadBox from the AppConfig
-		ShowUploadBox: AppConfig.ShowUploadBox,
-		// Set the ShowMenuDownloadPage from the AppConfig
+		ShowUploadBox:        AppConfig.ShowUploadBox,
 		ShowMenuDownloadPage: *AppConfig.ShowMenuDownloadPage,
 	}
 
-	// Execute the template with the data
-	if err := tmpl.ExecuteTemplate(w, "download.html", data); err != nil {
-		// If there's an error executing the template, return an error response
-		http.Error(w, "Error executing template: "+err.Error(), http.StatusInternalServerError)
+	// Execute the cached template with the data
+	if err := downloadTemplate.ExecuteTemplate(w, "download.html", data); err != nil {
+		handleError(w, "Error executing template: "+err.Error(), "Internal server error", http.StatusInternalServerError)
 	}
 }
 
 func main() {
 	// Read configuration from file
 	ReadConfig()
+
+	// Initialize template caching
+	if err := initTemplates(); err != nil {
+		fmt.Printf("Error initializing templates: %v\n", err)
+		return
+	}
 
 	// Ensure the upload directory exists
 	if _, err := os.Stat(AppConfig.UploadDir); os.IsNotExist(err) {
@@ -682,7 +788,7 @@ func main() {
 	}
 
 	// Create a new router to handle HTTP requests
-	r := mux.NewRouter()
+	r := mux.NewRouter().StrictSlash(true) // Enable strict slash for better routing
 
 	// Define routes for file upload and download
 	// -----------------------------
@@ -705,9 +811,10 @@ func main() {
 
 	// Serve static files directly from the root URL path
 	// This allows us to serve static assets (e.g. CSS, JS, images) from the /static directory
-	// Serve static files with caching middleware
-	r.PathPrefix("/share/").Handler(http.StripPrefix("/share", cacheMiddleware(http.FileServer(http.Dir("./static")))))
-	r.PathPrefix("/").Handler(cacheMiddleware(http.FileServer(http.Dir("./static"))))
+	// Serve static files with security and caching middleware
+	staticHandler := securityHeaders(cacheMiddleware(http.FileServer(http.Dir("./static"))))
+	r.PathPrefix("/share/").Handler(http.StripPrefix("/share", staticHandler))
+	r.PathPrefix("/").Handler(staticHandler)
 
 	// Schedule deletion of old files every hour using cron
 	// This ensures that old files are automatically removed from the system
@@ -715,10 +822,25 @@ func main() {
 	c.AddFunc("@hourly", deleteOldFiles)
 	c.Start()
 
-	// Start the server on port AppConfig.ServerPort
+	// Apply security headers to all routes
+	securedRouter := securityHeaders(r)
+
+	// Apply HTTPS redirection if enabled
+	var finalHandler http.Handler = securedRouter
+	if AppConfig.EnableTLS && AppConfig.RequireHTTPS != nil && *AppConfig.RequireHTTPS {
+		finalHandler = httpsRedirect(securedRouter)
+	}
+
+	// Start the server on port AppConfig.ServerPort with optimized settings
 	srv := &http.Server{
-		Handler: r,
+		Handler: finalHandler,
 		Addr:    ":" + AppConfig.ServerPort,
+		// Optimized timeouts for better performance and security
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second,
+		MaxHeaderBytes:    1 << 20, // 1MB max header size
 	}
 
 	// Print startup message and server status

@@ -7,6 +7,20 @@
     <title>SecureSling - Home</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" integrity="sha512-jnSuA4Ss2PkkikSOLtYs8BlYIeeIK1h99ty4YfvRPAlzr377vr3CXDb7sb7eEEBYjDtcYj+AjBH3FLv5uSJuXg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <!-- Early theme bootstrap to prevent flash of incorrect theme -->
+    <meta name="color-scheme" content="light dark">
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('theme');
+          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var isDark = saved ? (saved === 'dark') : prefersDark;
+          if (isDark) { document.documentElement.classList.add('dark-mode'); }
+        } catch (e) {}
+      })();
+    </script>
+
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;700&display=swap" referrerpolicy="no-referrer">
     <link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
@@ -15,6 +29,7 @@
     <link rel="manifest" href="/share/site.webmanifest">
 </head>
 <body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
     <nav class="navbar fixed-top navbar-light">
         <div class="container">
             <a class="navbar-brand fs-3" href="#"><img src="/share/logo.webp" alt="Logo" style="height: 30px; margin-right: 10px;">SecureSling</a>
@@ -32,12 +47,18 @@
                     <li class="nav-item">
                         <a class="nav-link" href="download.html">Download</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="help.html">Help</a>
+                    </li>
                 </ul>
             </div>
         </div>
     </nav>
+    <button class="dark-mode-toggle" id="darkModeToggle" aria-label="Toggle dark mode">
+        <i class="fas fa-moon"></i>
+    </button>
 
-    <div class="container">
+    <div class="container" id="main-content" tabindex="-1">
         <div class="jumbotron text-center main-content">
             <div class="logo-container display-4 animated fadeIn delay-500ms">
                 <img src="/share/logo.webp" alt="Logo">
@@ -49,7 +70,9 @@
             <p class="lead animated fadeIn delay-500ms">Easily and securely share your files with client-side encryption.</p>
             <hr class="my-4">
             <p class="animated fadeIn delay-1000ms">SecureSling ensures your files are protected during upload and download with advanced encryption techniques.</p>
-            <a class="btn btn-success btn-xl d-inline-block mt-4 btn-icon animated fadeIn delay-1000ms" href="upload.html" role="button">
+            <a class="btn btn-success btn-xl d-inline-block mt-4 btn-icon animated fadeIn delay-1000ms hover-tooltip" href="upload.html" role="button"
+               aria-label="Get started with SecureSling file upload"
+               data-tooltip="Start uploading your files with end-to-end encryption">
                 <i class="fas fa-upload"></i> Get Started
             </a>
         </div>
@@ -120,16 +143,141 @@
                 </div>
             </div>
         </div>
+
+        <!-- Help Documentation Section -->
+        <div class="row mt-5">
+            <div class="col-md-8 offset-md-2">
+                <div class="card">
+                    <div class="card-header text-center">
+                        <h4 class="mb-0"><i class="fas fa-question-circle me-2"></i>Help & Documentation</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="accordion" id="helpAccordion">
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="helpHeadingOne">
+                                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#helpCollapseOne" aria-expanded="true" aria-controls="helpCollapseOne">
+                                        <i class="fas fa-upload me-2"></i>How to Upload Files
+                                    </button>
+                                </h2>
+                                <div id="helpCollapseOne" class="accordion-collapse collapse show" aria-labelledby="helpHeadingOne" data-bs-parent="#helpAccordion">
+                                    <div class="accordion-body">
+                                        <ol>
+                                            <li>Click the "Get Started" button or navigate to the Upload page</li>
+                                            <li>Drag and drop your file into the upload area or click "Select File"</li>
+                                            <li>Optionally set advanced options:
+                                                <ul>
+                                                    <li><strong>One-time download:</strong> File can only be downloaded once</li>
+                                                    <li><strong>Password:</strong> Add encryption password (recommended)</li>
+                                                    <li><strong>Expiration date:</strong> Set when the file should expire</li>
+                                                    <li><strong>Max downloads:</strong> Limit number of downloads</li>
+                                                </ul>
+                                            </li>
+                                            <li>Click "Upload File" to encrypt and upload your file</li>
+                                            <li>Copy the generated download link to share with others</li>
+                                        </ol>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="helpHeadingTwo">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#helpCollapseTwo" aria-expanded="false" aria-controls="helpCollapseTwo">
+                                        <i class="fas fa-download me-2"></i>How to Download Files
+                                    </button>
+                                </h2>
+                                <div id="helpCollapseTwo" class="accordion-collapse collapse" aria-labelledby="helpHeadingTwo" data-bs-parent="#helpAccordion">
+                                    <div class="accordion-body">
+                                        <ol>
+                                            <li>Navigate to the Download page</li>
+                                            <li>Enter the file ID from the download link</li>
+                                            <li>If the file was encrypted with a password, enter it</li>
+                                            <li>Click "Download File" to decrypt and download</li>
+                                            <li>For one-time downloads, the file will be deleted after download</li>
+                                        </ol>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="helpHeadingThree">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#helpCollapseThree" aria-expanded="false" aria-controls="helpCollapseThree">
+                                        <i class="fas fa-shield-alt me-2"></i>Security Features
+                                    </button>
+                                </h2>
+                                <div id="helpCollapseThree" class="accordion-collapse collapse" aria-labelledby="helpHeadingThree" data-bs-parent="#helpAccordion">
+                                    <div class="accordion-body">
+                                        <h6>End-to-End Encryption</h6>
+                                        <ul>
+                                            <li>Files are encrypted with AES-GCM 256-bit encryption</li>
+                                            <li>Encryption/decryption happens entirely in your browser</li>
+                                            <li>The server never sees your unencrypted files</li>
+                                        </ul>
+                                        
+                                        <h6>Privacy Protection</h6>
+                                        <ul>
+                                            <li>No file content is stored on the server</li>
+                                            <li>One-time downloads prevent unauthorized access</li>
+                                            <li>Automatic expiration ensures files don't remain indefinitely</li>
+                                        </ul>
+                                        
+                                        <h6>Best Practices</h6>
+                                        <ul>
+                                            <li>Always use strong passwords for sensitive files</li>
+                                            <li>Enable one-time download for maximum security</li>
+                                            <li>Set reasonable expiration dates</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="helpHeadingFour">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#helpCollapseFour" aria-expanded="false" aria-controls="helpCollapseFour">
+                                        <i class="fas fa-exclamation-triangle me-2"></i>Troubleshooting
+                                    </button>
+                                </h2>
+                                <div id="helpCollapseFour" class="accordion-collapse collapse" aria-labelledby="helpHeadingFour" data-bs-parent="#helpAccordion">
+                                    <div class="accordion-body">
+                                        <h6>Common Issues</h6>
+                                        <ul>
+                                            <li><strong>File too large:</strong> Check maximum file size limit</li>
+                                            <li><strong>Invalid password:</strong> Ensure you're using the correct encryption password</li>
+                                            <li><strong>File expired:</strong> Check if the file has passed its expiration date</li>
+                                            <li><strong>Download limit reached:</strong> File may have reached maximum download count</li>
+                                        </ul>
+                                        
+                                        <h6>Getting Help</h6>
+                                        <p>If you encounter issues:</p>
+                                        <ol>
+                                            <li>Check the error message for specific details</li>
+                                            <li>Verify your internet connection</li>
+                                            <li>Try refreshing the page</li>
+                                            <li>Contact support if problems persist</li>
+                                        </ol>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center mt-4">
+                            <a href="#main-content" class="btn btn-primary btn-icon hover-tooltip" data-tooltip="Return to top of page">
+                                <i class="fas fa-arrow-up"></i> Back to Top
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
     <footer class="footer mt-5 py-3">
         <div class="container text-center">
             <span class="text-muted">SecureSling.</span>
             <i class="fab fa-github github-logo"></i>
-            <a href="https://github.com/jackyes/SecureSling" target="_blank" rel="noopener noreferrer">
+            <a href="https://github.com/jackyes/SecureSling" target="_blank" rel="noopener noreferrer" class="hover-tooltip"
+               aria-label="Visit SecureSling GitHub repository"
+               data-tooltip="View source code and contribute on GitHub">
                 GitHub
             </a>
         </div>
     </footer>
+    <script src="main.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js" integrity="sha512-7Pi/otdlbbCR+LnW+F7PwFcSDJOuUJB3OxtEHbg4vSMvzvJjde4Po1v4BR9Gdc9aXNUNFVUY+SK51wWT8WF0Gg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </body>
 </html>

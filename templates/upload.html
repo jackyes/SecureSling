@@ -14,6 +14,7 @@
     <link rel="manifest" href="/share/site.webmanifest">
 </head>
 <body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
     <nav class="navbar fixed-top navbar-light">
         <div class="container">
             <a class="navbar-brand fs-3" href="#"><img src="/share/logo.webp" alt="Logo" style="height: 30px; margin-right: 10px;">SecureSling</a>
@@ -31,11 +32,17 @@
                     <li class="nav-item">
                         <a class="nav-link" href="download.html">Download</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="help.html">Help</a>
+                    </li>
                 </ul>
             </div>
         </div>
     </nav>
-    <div class="container mt-5">
+    <button class="dark-mode-toggle" id="darkModeToggle" aria-label="Toggle dark mode">
+        <i class="fas fa-moon"></i>
+    </button>
+    <div class="container mt-5" id="main-content" tabindex="-1">
         <div class="logo-container display-4 animated fadeIn delay-500ms">
             <img src="/share/logo.webp" alt="Logo">
             <h1>SecureSling</h1>
@@ -51,84 +58,134 @@
         <div class="card">
             <div class="card-body">
                 <div class="drag-drop-area mb-4" id="dragDropArea">
-                    <p id="fileNameDisplay" class="mb-3"><i class="fas fa-cloud-upload-alt fa-3x" aria-label="Upload icon"></i> <br> Drag & Drop your file here</p>
+                    <p id="fileNameDisplay" class="mb-3" role="status" aria-live="polite">
+                        <i class="fas fa-cloud-upload-alt fa-3x" aria-hidden="true"></i>
+                        <br>
+                        <span aria-hidden="true">Drag & Drop your file here</span>
+                        <span class="sr-only">Drag and drop area for file upload. Alternatively, use the select file button.</span>
+                    </p>
                     <div class="divider-text"><span>or</span></div>
-                    <button onclick="triggerFileInput()" id="selectFileButton" class="btn btn-primary btn-icon" title="Click to select a file for upload">
+                    <button onclick="triggerFileInput()" id="selectFileButton" class="btn btn-primary btn-icon hover-tooltip"
+                        title="Click to select a file for upload" aria-label="Select file for upload" role="button"
+                        data-tooltip="Click to browse and select a file from your device">
                         <i class="fas fa-file-upload"></i> Select File
                     </button>
-                    <input type="file" id="fileInput" class="form-control mb-3" style="display:none;" onchange="handleFileSelect(event)" multiple/>
+                    <input type="file" id="fileInput" class="form-control mb-3 sr-only" onchange="handleFileSelect(event)" multiple
+                        aria-label="File input" accept="*/*"/>
+                </div>
+                <div id="filePreview" class="file-preview mt-3 d-none">
+                    <div class="preview-header d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">File Preview</h6>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="closePreview()" aria-label="Close preview">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="preview-content">
+                        <div id="imagePreview" class="image-preview mb-2 d-none">
+                            <img src="" alt="File preview" class="img-fluid rounded" style="max-height: 200px;">
+                        </div>
+                        <div id="textPreview" class="text-preview d-none">
+                            <pre class="bg-light p-2 rounded small" style="max-height: 150px; overflow: auto;"></pre>
+                        </div>
+                        <div id="genericPreview" class="generic-preview">
+                            <div class="file-info">
+                                <i class="fas fa-file fa-2x mb-2"></i>
+                                <p class="file-name mb-1 fw-bold"></p>
+                                <p class="file-size small text-muted mb-0"></p>
+                                <p class="file-type small text-muted"></p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <p id="selectedFileName" class="text-center mt-3 fw-bold text-primary"></p>
-                <button onclick="uploadFile()" id="uploadButton" class="btn btn-success btn-block mx-auto d-block mt-4 btn-icon">
+                <button id="uploadButton" type="button" class="btn btn-success btn-block mx-auto d-block mt-4 btn-icon hover-tooltip"
+                    aria-label="Upload selected file" role="button"
+                    data-tooltip="Upload your encrypted file to SecureSling">
                     <i class="fas fa-upload"></i> Upload File
                 </button>
-                <div class="progress mt-3 d-none" id="progressContainer">
+                <div class="progress mt-3 d-none" id="progressContainer" role="progressbar"
+                    aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Upload progress">
                     <div class="progress-bar" role="progressbar" style="width: 0%;" id="progressBar">0%</div>
                 </div>
-                <p id="statusMessage" class="mt-3"></p>
-                <p id="uploadedBytes" class="mt-3 text-center"></p>
-                <p id="fileID" class="mt-3 text-center"></p>
+                <p id="statusMessage" class="mt-3" role="status" aria-live="polite" aria-atomic="true"></p>
+                <p id="uploadedBytes" class="mt-3 text-center" role="status" aria-live="polite"></p>
+                <p id="fileID" class="mt-3 text-center" role="status" aria-live="polite"></p>
                 <div class="input-group mt-3 d-none" id="linkContainer">
-                    <input type="text" id="fileLink" class="form-control" readonly>
-                    <button class="btn btn-copy btn-icon" onclick="copyLink()">
+                    <input type="text" id="fileLink" class="form-control" readonly
+                        aria-label="File download link" role="textbox">
+                    <button class="btn btn-copy btn-icon hover-tooltip" onclick="copyLink()"
+                        aria-label="Copy download link to clipboard" role="button"
+                        data-tooltip="Copy the secure download link to share with others">
                         <i class="fas fa-copy"></i> Copy Link
                     </button>
                 </div>
-                <div id="errorMessage" class="alert alert-danger mt-3 d-none" role="alert"></div>
+                <div id="errorMessage" class="alert alert-danger mt-3 d-none" role="alert" aria-live="assertive"></div>
                 <div class="accordion mt-4 advanced-options" id="advancedOptions">
                     <div class="accordion-item">
                         <h2 class="accordion-header" id="headingOne">
-                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne"
+                                aria-label="Toggle advanced options">
                                 <i class="fas fa-cogs me-2"></i> Advanced Options
                             </button>
                         </h2>
                         <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#advancedOptions">
                             <div class="accordion-body">
                                 <div class="form-check mb-4">
-                                    <input type="checkbox" id="oneTimeDownload" class="form-check-input">
-                                    <label class="form-check-label" for="oneTimeDownload">
+                                    <input type="checkbox" id="oneTimeDownload" class="form-check-input hover-tooltip"
+                                        aria-describedby="oneTimeDownloadHelp"
+                                        data-tooltip="Enable one-time download for enhanced security">
+                                    <label class="form-check-label" for="oneTimeDownload" id="oneTimeDownloadLabel">
                                         <i class="fas fa-download me-2"></i> One-time download
                                     </label>
-                                    <small class="form-text text-muted d-block mt-1">
+                                    <small id="oneTimeDownloadHelp" class="form-text text-muted d-block mt-1">
                                         <i class="fas fa-info-circle me-1" style="color: var(--primary-color);"></i>
                                         Allow the file to be downloaded only once.
                                     </small>
                                 </div>
                                 <div id="passwordInputDiv" class="form-group mb-4">
                                     <label for="password">
-                                        <i class="fas fa-lock me-2"></i> Password (Optional)
+                                        <i class="fas fa-lock me-2" aria-hidden="true"></i> Password (Optional)
                                     </label>
                                     <div class="input-group">
-                                        <input type="password" id="password" class="form-control" autocomplete="off">
-                                        <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                                        <input type="password" id="password" class="form-control hover-tooltip" autocomplete="off"
+                                            aria-describedby="passwordHelp passwordStrength"
+                                            data-tooltip="Set a strong password for file encryption (optional)">
+                                        <button class="btn btn-outline-secondary hover-tooltip" type="button" id="togglePassword"
+                                            aria-label="Toggle password visibility" aria-pressed="false"
+                                            data-tooltip="Show/hide password text">
                                             <i class="fas fa-eye"></i>
                                         </button>
                                     </div>
                                     <div class="password-strength-meter">
                                         <div id="strengthMeter"></div>
                                     </div>
-                                    <small id="passwordStrength" class="form-text"></small>
-                                    <small class="form-text text-muted d-block mt-2">
+                                    <small id="passwordStrength" class="form-text" role="status" aria-live="polite"></small>
+                                    <small id="passwordHelp" class="form-text text-muted d-block mt-2">
                                         <i class="fas fa-key me-1" style="color: var(--primary-color);"></i>
                                         Enter a password to encrypt the file. Remember the password, it will be needed for the download.
                                     </small>
                                 </div>
                                 <div class="form-group mb-4">
                                     <label for="expiryDate">
-                                        <i class="fas fa-calendar-alt me-2"></i> Expiration Date
+                                        <i class="fas fa-calendar-alt me-2" aria-hidden="true"></i> Expiration Date
                                     </label>
-                                    <input type="date" id="expiryDate" class="form-control">
-                                    <small class="form-text text-muted d-block mt-1">
+                                    <input type="date" id="expiryDate" class="form-control hover-tooltip"
+                                        aria-describedby="expiryDateHelp"
+                                        data-tooltip="Set expiration date for automatic file deletion">
+                                    <small id="expiryDateHelp" class="form-text text-muted d-block mt-1">
                                         <i class="fas fa-calendar-check me-1" style="color: var(--primary-color);"></i>
                                         Set a date after which the file will no longer be available for download.
                                     </small>
                                 </div>
                                 <div class="form-group mb-4">
                                     <label for="maxDownloads">
-                                        <i class="fas fa-sort-numeric-up me-2"></i> Max Downloads
+                                        <i class="fas fa-sort-numeric-up me-2" aria-hidden="true"></i> Max Downloads
                                     </label>
-                                    <input type="number" id="maxDownloads" class="form-control" min="1">
-                                    <small class="form-text text-muted d-block mt-1">
+                                    <input type="number" id="maxDownloads" class="form-control hover-tooltip" min="1"
+                                        aria-describedby="maxDownloadsHelp"
+                                        data-tooltip="Limit maximum number of downloads allowed">
+                                    <small id="maxDownloadsHelp" class="form-text text-muted d-block mt-1">
                                         <i class="fas fa-sort-numeric-down me-1" style="color: var(--primary-color);"></i>
                                         Specify the maximum number of times the file can be downloaded.
                                     </small>

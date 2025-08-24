@@ -14,6 +14,7 @@
     <link rel="manifest" href="/share/site.webmanifest">
 </head>
 <body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
     <nav class="navbar fixed-top navbar-light">
         <div class="container">
             <span class="navbar-brand fs-3">
@@ -35,14 +36,19 @@
                     <li class="nav-item">
                         <a class="nav-link active" href="#">Download</a>
                     </li>
-                    
+                    <li class="nav-item">
+                        <a class="nav-link" href="help.html">Help</a>
+                    </li>
                 </ul>
             </div>
             {{end}}
         </div>
     </nav>
+    <button class="dark-mode-toggle" id="darkModeToggle" aria-label="Toggle dark mode">
+        <i class="fas fa-moon"></i>
+    </button>
 
-    <div class="container mt-5">
+    <div class="container mt-5" id="main-content" tabindex="-1">
         <div class="logo-container display-4 animated fadeIn delay-500ms">
             <img src="/share/logo.webp" alt="Logo">
             <h1>SecureSling</h1>
@@ -59,16 +65,19 @@
             <div class="card-header text-center">
                 <h3 class="mb-0"><i class="fas fa-cloud-download-alt me-2"></i> Secure File Transfer</h3>
             </div>
-            <div id="passwordInputDiv" class="form-group mb-4 d-none px-4 py-3 animated fadeIn delay-500ms border-bottom">
+            <div id="passwordInputDiv" class="form-group mb-4 d-none px-4 py-3 animated fadeIn delay-500ms border-bottom"
+                 role="region" aria-label="Password protected file section">
                 <div class="card-title mb-3">
                     <i class="fas fa-lock me-2"></i> Password Protected File
                 </div>
                 <label for="password" class="form-label">Password</label>
                 <small class="form-text text-muted d-block mb-2">Press Enter or use the button to submit password.</small>
                 <div class="input-group">
-                    <input type="password" id="password" class="form-control" autocomplete="off">
+                    <input type="password" id="password" class="form-control" autocomplete="off"
+                           aria-label="Enter password for file decryption" aria-required="true">
                     <div class="input-group-append">
-                        <button id="submitPassword" class="btn btn-primary btn-icon">
+                        <button id="submitPassword" class="btn btn-primary btn-icon"
+                                aria-label="Submit password" role="button">
                             <i class="fas fa-check"></i> Submit
                         </button>
                     </div>
@@ -80,16 +89,18 @@
             </div>
             <div class="card-body text-center clearfix animated fadeIn delay-500ms">
                 <p id="fileName" class="lead fw-bold text-primary mb-4"></p>
-                <button onclick="downloadFile()" id="downloadButton" class="btn btn-success btn-block mx-auto d-block mt-3 btn-icon">
+                <button onclick="downloadFile()" id="downloadButton" class="btn btn-success btn-block mx-auto d-block mt-3 btn-icon"
+                        aria-label="Download file" role="button">
                     <i class="fas fa-download"></i> Download File
                 </button>
-                <div class="progress mt-3 d-none" id="progressContainer">
+                <div class="progress mt-3 d-none" id="progressContainer" role="progressbar"
+                     aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Download progress">
                     <div class="progress-bar" role="progressbar" style="width: 0%;" id="progressBar">0%</div>
                 </div>
-                <p id="downloadedBytes" class="mt-3"></p>
-                <p id="downloadSpeed" class="mt-3"></p>
-                <p id="statusMessage" class="mt-3"></p>
-                <div id="errorMessage" class="alert alert-danger mt-3 d-none" role="alert"></div>
+                <p id="downloadedBytes" class="mt-3" role="status" aria-live="polite"></p>
+                <p id="downloadSpeed" class="mt-3" role="status" aria-live="polite"></p>
+                <p id="statusMessage" class="mt-3" role="status" aria-live="polite" aria-atomic="true"></p>
+                <div id="errorMessage" class="alert alert-danger mt-3 d-none" role="alert" aria-live="assertive"></div>
             </div>
         </div>
 
@@ -101,7 +112,8 @@
                     <i class="fas fa-shield-alt me-2" style="color: var(--primary-color);"></i>
                     Encrypt and share your files with end-to-end encryption. Your files remain private and secure.
                 </p>
-                <a href="upload.html" class="btn btn-primary btn-icon mx-auto d-block mb-2">
+                <a href="upload.html" class="btn btn-primary btn-icon mx-auto d-block mb-2"
+                   aria-label="Upload your files securely">
                     <i class="fas fa-file-upload"></i> Upload Your Files
                 </a>
             </div>

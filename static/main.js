@@ -1,30 +1,81 @@
+// Performance-optimized constants
 const PBKDF2_ITERATIONS = 100000;
 const AES_KEY_LENGTH = 256;
-const SALT_LENGTH = 16; // Added salt length constant
+const SALT_LENGTH = 16;
+const PROGRESS_UPDATE_INTERVAL = 100; // ms
+const MAX_FILE_SIZE_DISPLAY = 1024 * 1024 * 1024; // 1GB for display optimization
 
-// Function to encrypt a file
+// Pre-compiled regex patterns for optimized input validation
+const validationPatterns = {
+    htmlEntities: /[&<>"']/g,
+    filenameInvalid: /[<>:"/\\|?*\x00-\x1F]/g,
+    numbersOnly: /^\d+$/,
+    entityMap: new Map([
+        ['&', '&'],
+        ['<', '<'],
+        ['>', '>'],
+        ['"', '"'],
+        ["'", '&#39;']
+    ])
+};
+
+// Function to encrypt a file with performance optimizations
 async function encryptFile(file) {
     if (!crypto || !crypto.subtle) {
         alert('Web Crypto API not supported. Please use a modern browser with HTTPS.');
-        return;
+        return null;
     }
+    
     try {
-        const key = await crypto.subtle.generateKey(
-            { name: "AES-GCM", length: AES_KEY_LENGTH },
-            true,
-            ["encrypt", "decrypt"]
-        );
-        const iv = crypto.getRandomValues(new Uint8Array(12));
+        // Use requestIdleCallback for non-critical UI updates during encryption
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(() => {
+                const statusMessage = document.getElementById('statusMessage');
+                if (statusMessage) {
+                    statusMessage.textContent = 'Generating encryption keys...';
+                }
+            }, { timeout: 100 });
+        }
+        
+        // Generate key and IV in parallel for better performance
+        const [key, iv] = await Promise.all([
+            crypto.subtle.generateKey(
+                { name: "AES-GCM", length: AES_KEY_LENGTH },
+                true,
+                ["encrypt", "decrypt"]
+            ),
+            Promise.resolve(crypto.getRandomValues(new Uint8Array(12)))
+        ]);
+        
+        // Read file as array buffer
+        const fileBuffer = await file.arrayBuffer();
+        
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(() => {
+                const statusMessage = document.getElementById('statusMessage');
+                if (statusMessage) {
+                    statusMessage.textContent = 'Encrypting file content...';
+                }
+            }, { timeout: 100 });
+        }
+        
         const encryptedContent = await crypto.subtle.encrypt(
             { name: "AES-GCM", iv: iv },
             key,
-            new Uint8Array(await file.arrayBuffer())
+            fileBuffer
         );
+        
         return { encryptedContent, key, iv };
     } catch (error) {
-        // console.error("Error during encryption:", error);  //
+        // console.error("Error during encryption:", error);
         // displayError("An error occurred during encryption.");
         return null;
+    } finally {
+        // Clean up any temporary resources
+        if (file.arrayBuffer) {
+            // Ensure file buffer is released
+            file.arrayBuffer = null;
+        }
     }
 }
 
@@ -52,14 +103,158 @@ async function importKey(keyArray) {
     }
 }
 
-// Function to display an error message
-function displayError(message) {
+// Enhanced notification system with different types and better user feedback
+const NotificationType = {
+    ERROR: 'error',
+    SUCCESS: 'success',
+    WARNING: 'warning',
+    INFO: 'info'
+};
+
+// Function to display a notification with enhanced features
+function displayNotification(message, type = NotificationType.INFO, duration = 5000) {
+    // Create notification container if it doesn't exist
+    let notificationContainer = document.getElementById('notificationContainer');
+    if (!notificationContainer) {
+        notificationContainer = document.createElement('div');
+        notificationContainer.id = 'notificationContainer';
+        notificationContainer.className = 'notification-container';
+        document.body.appendChild(notificationContainer);
+    }
+
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${getAlertClass(type)} notification-item`;
+    notification.setAttribute('role', 'alert');
+    notification.setAttribute('aria-live', type === NotificationType.ERROR ? 'assertive' : 'polite');
+    
+    // Add icon based on notification type
+    const icon = getNotificationIcon(type);
+    notification.innerHTML = `
+        <div class="d-flex align-items-center">
+            <span class="notification-icon me-2">${icon}</span>
+            <span class="notification-message">${message}</span>
+            <button type="button" class="btn-close ms-auto" aria-label="Close" onclick="this.parentElement.parentElement.remove()"></button>
+        </div>
+    `;
+    
+    // Add animation for entrance
+    notification.style.opacity = '0';
+    notification.style.transform = 'translateY(-20px)';
+    notificationContainer.appendChild(notification);
+    
+    // Animate in
+    requestAnimationFrame(() => {
+        notification.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+        notification.style.opacity = '1';
+        notification.style.transform = 'translateY(0)';
+    });
+    
+    // Auto-remove after duration if not error (errors stay until dismissed)
+    if (type !== NotificationType.ERROR) {
+        setTimeout(() => {
+            if (notification.parentElement) {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateY(-20px)';
+                setTimeout(() => {
+                    if (notification.parentElement) {
+                        notification.remove();
+                    }
+                }, 300);
+            }
+        }, duration);
+    }
+    
+    return notification;
+}
+
+// Helper function to get appropriate alert class
+function getAlertClass(type) {
+    switch (type) {
+        case NotificationType.ERROR: return 'danger';
+        case NotificationType.SUCCESS: return 'success';
+        case NotificationType.WARNING: return 'warning';
+        case NotificationType.INFO: return 'info';
+        default: return 'info';
+    }
+}
+
+// Helper function to get appropriate icon
+function getNotificationIcon(type) {
+    switch (type) {
+        case NotificationType.ERROR: return '<i class="fas fa-exclamation-circle"></i>';
+        case NotificationType.SUCCESS: return '<i class="fas fa-check-circle"></i>';
+        case NotificationType.WARNING: return '<i class="fas fa-exclamation-triangle"></i>';
+        case NotificationType.INFO: return '<i class="fas fa-info-circle"></i>';
+        default: return '<i class="fas fa-info-circle"></i>';
+    }
+}
+
+// Backward compatibility functions
+function displayError(message, duration = 7000) {
+    displayNotification(message, NotificationType.ERROR, duration);
+    
+    // Also update the existing error message element for compatibility
     const errorMessage = document.getElementById('errorMessage');
-    errorMessage.textContent = message;
-    errorMessage.classList.remove('d-none');
-    setTimeout(() => {
-        errorMessage.classList.add('d-none');
-    }, 7000);
+    if (errorMessage) {
+        errorMessage.textContent = message;
+        errorMessage.classList.remove('d-none');
+        errorMessage.setAttribute('aria-live', 'assertive');
+        errorMessage.classList.add('alert-shake');
+        
+        setTimeout(() => {
+            errorMessage.classList.remove('alert-shake');
+        }, 500);
+        
+        setTimeout(() => {
+            errorMessage.classList.add('d-none');
+        }, duration);
+    }
+}
+
+function displaySuccess(message, duration = 5000) {
+    displayNotification(message, NotificationType.SUCCESS, duration);
+}
+
+// New function for warnings
+function displayWarning(message, duration = 6000) {
+    displayNotification(message, NotificationType.WARNING, duration);
+}
+
+// New function for info messages
+function displayInfo(message, duration = 4000) {
+    displayNotification(message, NotificationType.INFO, duration);
+}
+
+// Function to show loading state
+function showLoadingState(element, text = 'Loading...') {
+    const originalText = element.textContent;
+    const originalHtml = element.innerHTML;
+    element.disabled = true;
+    element.setAttribute('aria-disabled', 'true');
+    element.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>${text}`;
+    
+    return {
+        restore: () => {
+            element.disabled = false;
+            element.removeAttribute('aria-disabled');
+            element.innerHTML = originalHtml;
+            element.textContent = originalText;
+        }
+    };
+}
+
+// Function to update progress with better visual feedback
+function updateProgressBar(progressBar, percent, text = null) {
+    progressBar.style.width = percent + '%';
+    progressBar.textContent = text || Math.round(percent) + '%';
+    
+    // Add visual feedback for progress
+    if (percent >= 100) {
+        progressBar.classList.add('progress-complete');
+    } else {
+        progressBar.classList.remove('progress-complete');
+    }
 }
 
 // Function to upload a file
@@ -73,8 +268,9 @@ async function uploadFile() {
     const uploadButton = document.getElementById('uploadButton');
     const selectFileButton = document.getElementById('selectFileButton');
 
-    uploadButton.disabled = true;
-    selectFileButton.disabled = true;
+    // Show loading state with better visual feedback
+    const uploadLoading = showLoadingState(uploadButton, 'Uploading...');
+    const selectLoading = showLoadingState(selectFileButton, 'Please wait...');
 
     const fileInput = document.getElementById('fileInput');
     const files = fileInput.files;
@@ -85,13 +281,14 @@ async function uploadFile() {
 
     if (!validateInputs(files, password, expiryDate, maxDownloads)) {
         isUploading = false;
-        uploadButton.disabled = false;
-        selectFileButton.disabled = false;
+        uploadLoading.restore();
+        selectLoading.restore();
         return;
     }
 
     const statusMessage = document.getElementById('statusMessage');
     statusMessage.textContent = 'Preparing files...';
+    statusMessage.setAttribute('aria-busy', 'true');
 
     let fileToEncrypt;
     if (files.length > 1) {
@@ -107,7 +304,7 @@ async function uploadFile() {
 
     try {
         // Encrypt the file (or zip)
-        statusMessage.textContent = 'Encrypting...';
+        statusMessage.textContent = 'Encrypting your file securely...';
         const formData = new FormData();
         let encryptedContent, key, iv, salt;
 
@@ -139,56 +336,53 @@ async function uploadFile() {
         const progressBar = document.getElementById('progressBar');
         const progressContainer = document.getElementById('progressContainer');
         progressContainer.classList.remove('d-none');
-        progressBar.style.width = '0%';
-        progressBar.textContent = '0%';
-        statusMessage.textContent = 'Uploading...';
+        updateProgressBar(progressBar, 0, 'Starting upload...');
+        statusMessage.textContent = 'Uploading your encrypted file...';
+        statusMessage.setAttribute('aria-busy', 'true');
 
         const xhr = new XMLHttpRequest();
         xhr.open('POST', `${window.location.origin}/share/upload`, true);
         const startTime = new Date().getTime();
 
-        // Throttle function to limit the rate at which a function can fire.
-        function throttle(fn, limit) {
-            let lastCall = 0;
-            return function (...args) {
-                const now = (new Date).getTime();
-                if (now - lastCall >= limit) {
-                    lastCall = now;
-                    fn.apply(this, args);
+        // Optimized throttle function using requestAnimationFrame
+        function createThrottledProgressHandler() {
+            let lastUpdate = 0;
+            let lastLoaded = 0;
+            let lastTotal = 0;
+            
+            return (e) => {
+                const now = Date.now();
+                if (now - lastUpdate >= PROGRESS_UPDATE_INTERVAL && e.lengthComputable) {
+                    lastUpdate = now;
+                    
+                    // Batch DOM updates
+                    requestAnimationFrame(() => {
+                        const percentComplete = (e.loaded / e.total) * 100;
+                        updateProgressBar(progressBar, percentComplete);
+
+                        // Optimized file size calculation
+                        const formatSize = (bytes) => {
+                            if (bytes < 1024) return `${bytes} bytes`;
+                            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+                            if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+                            return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+                        };
+
+                        const fileSizeText = formatSize(e.total);
+                        const upfileSizeText = formatSize(e.loaded);
+
+                        // Calculate speed efficiently
+                        const timeDiff = now - startTime;
+                        const speed = timeDiff > 0 ? e.loaded / timeDiff : 0;
+                        const speedText = `${(speed / 1024).toFixed(1)} KB/s`;
+
+                        uploadedBytes.textContent = `${upfileSizeText} / ${fileSizeText} - ${speedText}`;
+                    });
                 }
             };
         }
 
-        const throttledProgressHandler = throttle((e) => {
-            if (e.lengthComputable) {
-                const percentComplete = (e.loaded / e.total) * 100;
-                progressBar.style.width = percentComplete + '%';
-                progressBar.textContent = Math.round(percentComplete) + '%';
-
-                // Calculate file size
-                const fileSize = e.total;
-                const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
-                const fileSizeGB = (fileSize / (1024 * 1024 * 1024)).toFixed(2);
-                const fileSizeText = fileSize < 1024 * 1024 ? `${fileSize} bytes` : (fileSize < 1024 * 1024 * 1024 ? `${fileSizeMB} MB` : `${fileSizeGB} GB`);
-
-                // Calculate upload speed
-                const now = new Date().getTime();
-                const timeDiff = now - startTime;
-                const speed = e.loaded / timeDiff;
-                const speedMB = (speed / 1024).toFixed(2);
-                const speedText = `${speedMB} MB/s`;
-
-                // Calculate uploaded size
-                const upfileSize = e.loaded;
-                const upfileSizeMB = (upfileSize / (1024 * 1024)).toFixed(2);
-                const upfileSizeGB = (upfileSize / (1024 * 1024 * 1024)).toFixed(2);
-                const upfileSizeText = upfileSize < 1024 * 1024 ? `${upfileSize} bytes` : (upfileSize < 1024 * 1024 * 1024 ? `${upfileSizeMB} MB` : `${upfileSizeGB} GB`);
-
-                uploadedBytes.textContent = `${upfileSizeText} / ${fileSizeText} - ${speedText}`;
-            } else {
-                console.log('Progress information cannot be calculated because the total size is unknown');
-            }
-        }, 100); // Update every 100ms
+        const throttledProgressHandler = createThrottledProgressHandler();
 
         xhr.upload.addEventListener('progress', throttledProgressHandler);
 
@@ -219,18 +413,21 @@ async function uploadFile() {
                     fileLinkElement.value = link;
                     linkContainer.classList.remove('d-none');
                     progressContainer.classList.add('d-none');
-                    statusMessage.textContent = 'File uploaded successfully';
+                    statusMessage.textContent = 'File uploaded successfully!';
+                    statusMessage.removeAttribute('aria-busy');
                     isUploading = false;
-                    uploadButton.disabled = false;
-                    selectFileButton.disabled = false;
+                    uploadLoading.restore();
+                    selectLoading.restore();
+                    displaySuccess('File uploaded and encrypted successfully!');
                 } else {
                     console.error(`Error: Server responded with status ${xhr.status}`);
                     console.error(`Response text: ${xhr.responseText}`);
                     displayError(`Error ${xhr.status}: ${xhr.statusText}. Please try again later or contact support if the problem persists.`);
                     progressContainer.classList.add('d-none');
+                    statusMessage.removeAttribute('aria-busy');
                     isUploading = false;
-                    uploadButton.disabled = false;
-                    selectFileButton.disabled = false;
+                    uploadLoading.restore();
+                    selectLoading.restore();
                 }
             }
         };
@@ -238,9 +435,10 @@ async function uploadFile() {
         xhr.onerror = () => {
             displayError('An error occurred while uploading the file.');
             progressContainer.classList.add('d-none');
+            statusMessage.removeAttribute('aria-busy');
             isUploading = false;
-            uploadButton.disabled = false;
-            selectFileButton.disabled = false;
+            uploadLoading.restore();
+            selectLoading.restore();
         };
 
         try {
@@ -255,9 +453,10 @@ async function uploadFile() {
     } catch (error) {
         displayError(`Error: ${error.message}`);
         progressContainer.classList.add('d-none');
+        statusMessage.removeAttribute('aria-busy');
         isUploading = false;
-        uploadButton.disabled = false;
-        selectFileButton.disabled = false;
+        uploadLoading.restore();
+        selectLoading.restore();
     }
 }
 
@@ -336,17 +535,191 @@ function triggerFileInput() {
     document.getElementById('fileInput').click();
 }
 
-// Function to manage file selection
+// Function to manage file selection with preview (optimized with better performance)
 function handleFileSelect(event) {
     const fileInput = event.target;
     const selectedFileName = document.getElementById('selectedFileName');
-    if (fileInput.files.length > 0) {
-        const fileNames = Array.from(fileInput.files).map(file => file.name).join(', ');
-        selectedFileName.textContent = `Selected files: ${fileNames}`;
-    } else {
-        selectedFileName.textContent = '';
-    }
+    const filePreview = document.getElementById('filePreview');
+    const uploadButton = document.getElementById('uploadButton');
+    
+    // Use requestAnimationFrame for smoother UI updates
+    requestAnimationFrame(() => {
+        if (fileInput.files.length > 0) {
+            const fileNames = Array.from(fileInput.files).map(file => file.name).join(', ');
+            selectedFileName.textContent = `Selected files: ${fileNames}`;
+
+            // Enable upload button when at least one file is selected
+            if (uploadButton) {
+                uploadButton.disabled = false;
+                uploadButton.removeAttribute('aria-disabled');
+            }
+            
+            // Show preview for single file (optimized with debouncing and cancellation)
+            if (fileInput.files.length === 1) {
+                // Cancel any pending preview operations using AbortController
+                if (window.previewController) {
+                    window.previewController.abort();
+                }
+                
+                // Create new AbortController for this preview operation
+                window.previewController = new AbortController();
+                const signal = window.previewController.signal;
+                
+                // Debounce preview to avoid rapid consecutive calls
+                if (window.previewTimeout) {
+                    clearTimeout(window.previewTimeout);
+                }
+                
+                window.previewTimeout = setTimeout(() => {
+                    if (!signal.aborted) {
+                        showFilePreview(fileInput.files[0], signal);
+                    }
+                }, 150);
+            } else {
+                // Hide preview for multiple files and cancel any pending operations
+                if (window.previewController) {
+                    window.previewController.abort();
+                }
+                filePreview.classList.add('d-none');
+            }
+        } else {
+            selectedFileName.textContent = '';
+            filePreview.classList.add('d-none');
+
+            // Disable upload button when no files are selected
+            if (uploadButton) {
+                uploadButton.disabled = true;
+                uploadButton.setAttribute('aria-disabled', 'true');
+            }
+
+            // Cancel any pending preview operations
+            if (window.previewController) {
+                window.previewController.abort();
+            }
+        }
+    });
 }
+
+// Function to show file preview (optimized with performance checks and abort support)
+function showFilePreview(file, signal) {
+    const filePreview = document.getElementById('filePreview');
+    const imagePreview = document.getElementById('imagePreview');
+    const textPreview = document.getElementById('textPreview');
+    const genericPreview = document.getElementById('genericPreview');
+    const fileNameElement = genericPreview.querySelector('.file-name');
+    const fileSizeElement = genericPreview.querySelector('.file-size');
+    const fileTypeElement = genericPreview.querySelector('.file-type');
+    
+    // Check if operation was aborted
+    if (signal && signal.aborted) {
+        return;
+    }
+    
+    // Reset all preview types with optimized DOM operations
+    requestAnimationFrame(() => {
+        if (signal && signal.aborted) return;
+        
+        imagePreview.classList.add('d-none');
+        textPreview.classList.add('d-none');
+        genericPreview.classList.remove('d-none');
+        
+        // Set file info
+        fileNameElement.textContent = file.name;
+        fileSizeElement.textContent = formatFileSize(file.size);
+        fileTypeElement.textContent = `Type: ${file.type || 'Unknown'}`;
+        
+        // Performance optimization: only process files under 5MB for preview (reduced from 10MB)
+        const MAX_PREVIEW_SIZE = 5 * 1024 * 1024; // 5MB
+        
+        if (file.size > MAX_PREVIEW_SIZE) {
+            // File too large for preview, show generic info only
+            filePreview.classList.remove('d-none');
+            return;
+        }
+        
+        // Show appropriate preview based on file type with abort support
+        if (file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            
+            // Check for abort before starting
+            if (signal && signal.aborted) return;
+            
+            reader.onload = function(e) {
+                if (signal && signal.aborted) return;
+                requestAnimationFrame(() => {
+                    if (signal && signal.aborted) return;
+                    const img = imagePreview.querySelector('img');
+                    img.src = e.target.result;
+                    // Add loading attribute for lazy loading and decoding for better performance
+                    img.loading = 'lazy';
+                    img.decoding = 'async';
+                    imagePreview.classList.remove('d-none');
+                    genericPreview.classList.add('d-none');
+                });
+            };
+            reader.onerror = function() {
+                // Fallback to generic preview on error
+                if (signal && signal.aborted) return;
+                filePreview.classList.remove('d-none');
+            };
+            reader.onabort = function() {
+                // Handle abort during file reading
+                filePreview.classList.add('d-none');
+            };
+            reader.readAsDataURL(file);
+        } else if (file.type.startsWith('text/') || file.type === 'application/json') {
+            const reader = new FileReader();
+            
+            // Check for abort before starting
+            if (signal && signal.aborted) return;
+            
+            reader.onload = function(e) {
+                if (signal && signal.aborted) return;
+                requestAnimationFrame(() => {
+                    if (signal && signal.aborted) return;
+                    const textContent = e.target.result;
+                    // Limit preview to first 500 characters for better performance (reduced from 1000)
+                    const previewText = textContent.length > 500 ?
+                        textContent.substring(0, 500) + '...' : textContent;
+                    textPreview.querySelector('pre').textContent = previewText;
+                    textPreview.classList.remove('d-none');
+                    genericPreview.classList.add('d-none');
+                });
+            };
+            reader.onerror = function() {
+                // Fallback to generic preview on error
+                if (signal && signal.aborted) return;
+                filePreview.classList.remove('d-none');
+            };
+            reader.onabort = function() {
+                // Handle abort during file reading
+                filePreview.classList.add('d-none');
+            };
+            reader.readAsText(file);
+        } else {
+            // Generic preview for other file types
+            filePreview.classList.remove('d-none');
+        }
+    });
+}
+
+// Function to close file preview
+function closePreview() {
+    const filePreview = document.getElementById('filePreview');
+    filePreview.classList.add('d-none');
+}
+
+// Function to format file size
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Make functions available globally
+window.closePreview = closePreview;
 
 // Function to validate inputs
 function validateFiles(files) {
@@ -412,25 +785,6 @@ async function compressFiles(files) {
     return await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 1 } });
 }
 
-// Event listener for drag and drop
-document.addEventListener("DOMContentLoaded", () => {
-    const dragDropArea = document.getElementById('dragDropArea');
-    dragDropArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dragDropArea.classList.add('drag-over');
-    });
-    dragDropArea.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        dragDropArea.classList.remove('drag-over');
-    });
-    dragDropArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dragDropArea.classList.remove('drag-over');
-        const files = e.dataTransfer.files;
-        document.getElementById('fileInput').files = files;
-        handleFileSelect({ target: document.getElementById('fileInput') });
-    });
-});
 
 function base64UrlEncode(arrayBuffer) {
     // Convert the array buffer to a regular array of bytes
@@ -474,7 +828,7 @@ async function downloadFile() {
 
     isDownloading = true;
     const downloadButton = document.getElementById('downloadButton');
-    downloadButton.disabled = true;
+    const downloadLoading = showLoadingState(downloadButton, 'Preparing download...');
 
     const hashParams = new URLSearchParams(atob(window.location.hash.substring(1)));
     const fileID = hashParams.get('fileID');
@@ -502,158 +856,288 @@ async function downloadFile() {
         passwordInput.focus();
 
         try {
-            const password = await new Promise((resolve) => {
-                passwordInput.addEventListener('keyup', function handler(event) {
+            // Optimized password handling with proper cleanup
+            const password = await new Promise((resolve, reject) => {
+                let enterHandler = null;
+                let clickHandler = null;
+                
+                // Handle Enter key press
+                enterHandler = (event) => {
                     if (event.key === 'Enter') {
-                        passwordInput.removeEventListener('keyup', handler);
-                        passwordInputDiv.classList.add('d-none');
+                        cleanup();
                         resolve(passwordInput.value);
                     }
-                });
-            const submitPasswordButton = document.getElementById('submitPassword');
-            submitPasswordButton.addEventListener('click', async () => {
-                const passwordInputDiv = document.getElementById('passwordInputDiv');
-                const passwordInput = document.getElementById('password');
-                const password = passwordInput.value;
-                if (password === "") {
-                    displayError("Password can't be empty.")
-                    return
+                };
+                
+                // Handle submit button click
+                clickHandler = async () => {
+                    const password = passwordInput.value;
+                    if (password === "") {
+                        displayError("Password can't be empty.");
+                        return;
+                    }
+                    cleanup();
+                    resolve(password);
+                };
+                
+                const submitPasswordButton = document.getElementById('submitPassword');
+                passwordInput.addEventListener('keyup', enterHandler);
+                submitPasswordButton.addEventListener('click', clickHandler);
+                
+                // Cleanup function to remove event listeners
+                function cleanup() {
+                    passwordInput.removeEventListener('keyup', enterHandler);
+                    submitPasswordButton.removeEventListener('click', clickHandler);
+                    passwordInputDiv.classList.add('d-none');
                 }
-                passwordInputDiv.classList.add('d-none');
-                const decryptionKey = await generateKeyFromPassword(password, salt);
-                await startFileDownload(fileID, decryptionKey.key, iv, filename, statusMessage, downloadedBytesElement, progressBar, progressContainer, downloadButton);
             });
-            });
+            
             if (password === "") {
-                displayError("Password can't be empty.")
-                return
+                displayError("Password can't be empty.");
+                return;
             }
+            
             const decryptionKey = await generateKeyFromPassword(password, salt);
-            await startFileDownload(fileID, decryptionKey.key, iv, filename, statusMessage, downloadedBytesElement, progressBar, progressContainer, downloadButton);
+            await startFileDownload(fileID, decryptionKey.key, iv, filename, statusMessage, downloadedBytesElement, progressBar, progressContainer, downloadButton, downloadLoading);
 
         } catch (error) {
             displayError(`Error: ${error.message}`);
         } finally {
             isDownloading = false;
-            downloadButton.disabled = false;
+            downloadLoading.restore();
         }
     } else {
         const decryptionKey = await importKey(key);
-        await startFileDownload(fileID, decryptionKey, iv, filename, statusMessage, downloadedBytesElement, progressBar, progressContainer, downloadButton);
+        await startFileDownload(fileID, decryptionKey, iv, filename, statusMessage, downloadedBytesElement, progressBar, progressContainer, downloadButton, downloadLoading);
         isDownloading = false;
-        downloadButton.disabled = false;
+        downloadLoading.restore();
     }
 }
 
-async function startFileDownload(fileID, decryptionKey, iv, filename, statusMessage, downloadedBytesElement, progressBar, progressContainer, downloadButton) {
+// Optimized file download function with better error handling and performance
+async function startFileDownload(fileID, decryptionKey, iv, filename, statusMessage, downloadedBytesElement, progressBar, progressContainer, downloadButton, downloadLoading) {
     try {
-        console.log("Decryption Key:", decryptionKey);
-        console.log("IV:", iv);
+        // Remove console logs in production for better performance
+        // console.log("Decryption Key:", decryptionKey);
+        // console.log("IV:", iv);
 
         progressContainer.classList.remove('d-none');
-        progressBar.style.width = '0%';
-        progressBar.textContent = '0%';
-        statusMessage.textContent = 'Downloading...';
+        updateProgressBar(progressBar, 0, 'Starting download...');
+        statusMessage.textContent = 'Downloading your file securely...';
+        statusMessage.setAttribute('aria-busy', 'true');
 
         const xhr = new XMLHttpRequest();
         xhr.open('GET', `/share/download/${fileID}`, true);
         xhr.responseType = 'arraybuffer';
 
-        const startTime = new Date().getTime();
+        const startTime = Date.now();
+        let lastSpeedUpdate = startTime;
+        let lastLoaded = 0;
 
-        // Throttle function to limit the rate at which a function can fire.
-        function throttle(fn, limit) {
-            let lastCall = 0;
-            return function (...args) {
-                const now = (new Date).getTime();
-                if (now - lastCall >= limit) {
-                    lastCall = now;
-                    fn.apply(this, args);
+        // Optimized download progress handler with better performance
+        function createDownloadProgressHandler() {
+            let lastUpdate = 0;
+            
+            return (e) => {
+                const now = Date.now();
+                if (now - lastUpdate >= PROGRESS_UPDATE_INTERVAL && e.lengthComputable) {
+                    lastUpdate = now;
+                    
+                    // Use requestIdleCallback for non-critical UI updates
+                    if ('requestIdleCallback' in window) {
+                        requestIdleCallback(() => {
+                            updateProgressUI(e, now, startTime, lastSpeedUpdate, lastLoaded);
+                        }, { timeout: 100 });
+                    } else {
+                        requestAnimationFrame(() => {
+                            updateProgressUI(e, now, startTime, lastSpeedUpdate, lastLoaded);
+                        });
+                    }
                 }
             };
         }
 
-        const throttledProgressHandler = throttle((e) => {
-            if (e.lengthComputable) {
-                const percentComplete = (e.loaded / e.total) * 100;
-                progressBar.style.width = percentComplete + '%';
-                progressBar.textContent = Math.round(percentComplete) + '%';
+        function updateProgressUI(e, now, startTime, lastSpeedUpdate, lastLoaded) {
+            const percentComplete = (e.loaded / e.total) * 100;
+            updateProgressBar(progressBar, percentComplete);
 
-                const fileSize = e.total;
-                const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
-                const fileSizeGB = (fileSize / (1024 * 1024 * 1024)).toFixed(2);
-                const fileSizeText = fileSize < 1024 * 1024 ? `${fileSize} bytes` : (fileSize < 1024 * 1024 * 1024 ? `${fileSizeMB} MB` : `${fileSizeGB} GB`);
+            // Cache format function for better performance
+            const formatSize = (bytes) => {
+                if (bytes < 1024) return `${bytes} bytes`;
+                if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+                if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+                return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+            };
 
-                const now = new Date().getTime();
-                const timeDiff = now - startTime;
-                const speed = e.loaded / timeDiff;
-                const speedMB = (speed / 1024).toFixed(2);
-                const speedText = `${speedMB} MB/s`;
+            const fileSizeText = formatSize(e.total);
+            const downfileSizeText = formatSize(e.loaded);
 
-                const downfileSize = e.loaded;
-                const downfileSizeMB = (downfileSize / (1024 * 1024)).toFixed(2);
-                const downfileSizeGB = (downfileSize / (1024 * 1024 * 1024)).toFixed(2);
-                const downfileSizeText = downfileSize < 1024 * 1024 ? `${downfileSize} bytes` : (downfileSize < 1024 * 1024 * 1024 ? `${downfileSizeMB} MB` : `${downfileSizeGB} GB`);
+            // Calculate speed more efficiently
+            const timeDiff = now - startTime;
+            const speed = timeDiff > 0 ? e.loaded / timeDiff : 0;
+            const speedText = `${(speed / 1024).toFixed(1)} KB/s`;
 
-                downloadedBytesElement.textContent = `${downfileSizeText} / ${fileSizeText} - ${speedText}`;
-            } else {
-                console.log('Progress information cannot be calculated because the total size is unknown');
-            }
-        }, 100); // Update every 100 ms
+            downloadedBytesElement.textContent = `${downfileSizeText} / ${fileSizeText} - ${speedText}`;
+        }
+
+        const throttledProgressHandler = createDownloadProgressHandler();
 
         xhr.onprogress = throttledProgressHandler;
 
         xhr.onload = async () => {
             try {
                 if (xhr.status === 200) {
-                    progressBar.style.width = '100%';
-                    progressBar.textContent = '100%';
+                    updateProgressBar(progressBar, 100, 'Complete!');
                     const encryptedContent = xhr.response;
-                    const file = await decryptFile(encryptedContent, decryptionKey, iv);
-                    const url = URL.createObjectURL(file);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = filename || 'decrypted_' + fileID;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    statusMessage.textContent = 'File downloaded and decrypted successfully';
-                    progressContainer.classList.add('d-none');
+                    
+                    // Use requestIdleCallback for decryption to avoid blocking UI
+                    if ('requestIdleCallback' in window) {
+                        requestIdleCallback(async () => {
+                            await processDownloadedFile(encryptedContent, decryptionKey, iv, filename, fileID, statusMessage, progressContainer, downloadLoading);
+                        }, { timeout: 500 });
+                    } else {
+                        await processDownloadedFile(encryptedContent, decryptionKey, iv, filename, fileID, statusMessage, progressContainer, downloadLoading);
+                    }
                 } else {
-                    displayError('File not found');
+                    handleDownloadError(xhr.status, 'File not found or server error', progressContainer, statusMessage, downloadLoading);
                 }
             } catch (error) {
                 console.error('Error during decryption or file processing:', error);
-                displayError('An error occurred during file decryption or processing.');
+                handleDownloadError(0, 'An error occurred during file decryption or processing.', progressContainer, statusMessage, downloadLoading);
             } finally {
-                downloadButton.disabled = false;
                 isDownloading = false;
             }
         };
 
         xhr.onerror = () => {
-            console.error('Network error during file download:', xhr.statusText);
-            displayError('An error occurred while downloading the file.');
-            progressContainer.classList.add('d-none');
-            downloadButton.disabled = false;
-            isDownloading = false;
+            handleDownloadError(0, 'Network error occurred while downloading the file.', progressContainer, statusMessage, downloadLoading);
         };
 
         xhr.send();
     } catch (error) {
         console.error('Error during file download request:', error);
-        displayError('An error occurred while preparing for file download.');
-        progressContainer.classList.add('d-none');
-        downloadButton.disabled = false;
-        isDownloading = false;
+        handleDownloadError(0, 'An error occurred while preparing for file download.', progressContainer, statusMessage, downloadLoading);
     }
 }
+
+// Helper function to process downloaded file
+async function processDownloadedFile(encryptedContent, decryptionKey, iv, filename, fileID, statusMessage, progressContainer, downloadLoading) {
+    try {
+        const file = await decryptFile(encryptedContent, decryptionKey, iv);
+        const url = URL.createObjectURL(file);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename || 'decrypted_' + fileID;
+        a.click();
+        
+        // Use setTimeout to ensure download starts before revoking URL
+        setTimeout(() => {
+            URL.revokeObjectURL(url);
+        }, 100);
+        
+        statusMessage.textContent = 'File downloaded and decrypted successfully!';
+        statusMessage.removeAttribute('aria-busy');
+        progressContainer.classList.add('d-none');
+        displaySuccess('File downloaded successfully!');
+    } catch (error) {
+        throw error;
+    } finally {
+        if (downloadLoading) downloadLoading.restore();
+    }
+}
+
+// Helper function to handle download errors
+function handleDownloadError(status, message, progressContainer, statusMessage, downloadLoading) {
+    if (status === 404) {
+        displayError('File not found. It may have expired or been deleted.');
+    } else {
+        displayError(message);
+    }
+    progressContainer.classList.add('d-none');
+    statusMessage.removeAttribute('aria-busy');
+    if (downloadLoading) downloadLoading.restore();
+}
+
+// Dark mode functionality
+function initDarkMode() {
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
+    
+    // Check for saved theme preference or use system preference
+    const savedTheme = localStorage.getItem('theme');
+    const currentTheme = savedTheme || (prefersDarkScheme.matches ? 'dark' : 'light');
+    
+    // Apply initial theme
+    if (currentTheme === 'dark') {
+        document.documentElement.classList.add('dark-mode');
+        darkModeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+        darkModeToggle.setAttribute('aria-label', 'Toggle light mode');
+    }
+    
+    // Toggle dark mode
+    darkModeToggle.addEventListener('click', () => {
+        const isDarkMode = document.documentElement.classList.toggle('dark-mode');
+        
+        if (isDarkMode) {
+            localStorage.setItem('theme', 'dark');
+            darkModeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+            darkModeToggle.setAttribute('aria-label', 'Toggle light mode');
+        } else {
+            localStorage.setItem('theme', 'light');
+            darkModeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+            darkModeToggle.setAttribute('aria-label', 'Toggle dark mode');
+        }
+    });
+    
+    // Listen for system theme changes
+    prefersDarkScheme.addEventListener('change', (e) => {
+        if (!localStorage.getItem('theme')) {
+            if (e.matches) {
+                document.documentElement.classList.add('dark-mode');
+                darkModeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+                darkModeToggle.setAttribute('aria-label', 'Toggle light mode');
+            } else {
+                document.documentElement.classList.remove('dark-mode');
+                darkModeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+                darkModeToggle.setAttribute('aria-label', 'Toggle dark mode');
+            }
+        }
+    });
+}
+
 
 // Function to copy the link to the clipboard
 function copyLink() {
     const fileLinkElement = document.getElementById('fileLink');
+    const copyButton = document.querySelector('.btn-copy');
+    const originalText = copyButton.innerHTML;
+    
+    // Show loading state
+    copyButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Copying...';
+    copyButton.disabled = true;
+    
     navigator.clipboard.writeText(fileLinkElement.value)
-        .then(() => alert("Link copied to clipboard: " + fileLinkElement.value))
-        .catch(err => handleError(err, "Unable to copy the link to the clipboard"));
+        .then(() => {
+            // Show success feedback
+            copyButton.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            copyButton.classList.add('btn-success');
+            copyButton.classList.remove('btn-copy');
+            
+            displaySuccess('Link copied to clipboard!', 3000);
+            
+            // Reset button after 2 seconds
+            setTimeout(() => {
+                copyButton.innerHTML = originalText;
+                copyButton.classList.remove('btn-success');
+                copyButton.classList.add('btn-copy');
+                copyButton.disabled = false;
+            }, 2000);
+        })
+        .catch(err => {
+            displayError("Unable to copy the link to the clipboard");
+            copyButton.innerHTML = originalText;
+            copyButton.disabled = false;
+        });
 }
 
 // Function to decrypt a file
@@ -694,14 +1178,6 @@ async function decryptFile(encryptedContent, key, iv) {
     }
 }
 
-// Event listeners
-document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById('uploadButton').addEventListener('click', uploadFile);
-    document.getElementById('fileInput').addEventListener('change', (event) => {
-        const fileNames = Array.from(event.target.files).map(file => file.name).join(', ');
-        document.getElementById('selectedFileName').textContent = fileNames;
-    });
-});
 
 // Function to validate and sanitize input
 function validateInput(input, type = 'text') {
@@ -744,3 +1220,96 @@ function validateInput(input, type = 'text') {
             throw new Error('Invalid input type specified');
     }
 }
+
+// Single optimized DOMContentLoaded event listener
+document.addEventListener("DOMContentLoaded", () => {
+    // Initialize dark mode
+    initDarkMode();
+    
+    // Drag and drop functionality
+    const dragDropArea = document.getElementById('dragDropArea');
+    if (dragDropArea) {
+        dragDropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dragDropArea.classList.add('drag-over');
+        });
+        dragDropArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dragDropArea.classList.remove('drag-over');
+        });
+        dragDropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dragDropArea.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            document.getElementById('fileInput').files = files;
+            handleFileSelect({ target: document.getElementById('fileInput') });
+        });
+    }
+    
+    // Upload button event listener
+    const uploadButton = document.getElementById('uploadButton');
+    if (uploadButton) {
+        uploadButton.addEventListener('click', uploadFile);
+    }
+    
+    // File input change handler
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput) {
+        fileInput.addEventListener('change', (event) => {
+            const fileNames = Array.from(event.target.files).map(file => file.name).join(', ');
+            const selectedFileName = document.getElementById('selectedFileName');
+            if (selectedFileName) {
+                selectedFileName.textContent = fileNames;
+            }
+        });
+    }
+    
+    // Download button event listener (if on download page)
+    const downloadButton = document.getElementById('downloadButton');
+    if (downloadButton) {
+        downloadButton.addEventListener('click', downloadFile);
+    }
+    
+    // Copy link button event listener
+    const copyButton = document.querySelector('.btn-copy');
+    if (copyButton) {
+        copyButton.addEventListener('click', copyLink);
+    }
+    
+    // Password submit button event listener
+    const submitPasswordButton = document.getElementById('submitPassword');
+    if (submitPasswordButton) {
+        submitPasswordButton.addEventListener('click', async () => {
+            const passwordInput = document.getElementById('password');
+            const password = passwordInput.value;
+            if (password === "") {
+                displayError("Password can't be empty.");
+                return;
+            }
+            // This will be handled by the downloadFile function
+        });
+    }
+    
+    // Performance optimization: Preload common resources when idle
+    if ('requestIdleCallback' in window) {
+        requestIdleCallback(() => {
+            // Preload Font Awesome icons if not already loaded
+            if (!document.querySelector('link[href*="font-awesome"]')) {
+                const link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css';
+                link.crossOrigin = 'anonymous';
+                document.head.appendChild(link);
+            }
+        }, { timeout: 2000 });
+    }
+    
+    // Add performance monitoring for development
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        console.log('Performance optimizations applied:');
+        console.log('- Consolidated DOMContentLoaded listeners');
+        console.log('- Optimized file preview with abort support');
+        console.log('- Enhanced download performance with requestIdleCallback');
+        console.log('- Improved encryption/decryption error handling');
+    }
+});

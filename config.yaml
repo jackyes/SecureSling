@@ -1,14 +1,19 @@
 ServerPort: 8080 # Port the server will listen on
-EnableTLS: false # Enable HTTPS (configure CertPathCrt and CertPathKey if true)
-CertPathCrt: "/etc/letsencrypt/live/xxx/fullchain.pem" # Path to the SSL certificate file
-CertPathKey: "/etc/letsencrypt/live/xxx/privkey.pem" # Path to the SSL certificate key file
+EnableTLS: true # Enable HTTPS (configure CertPathCrt and CertPathKey if true)
+CertPathCrt: "/etc/letsencrypt/live/your-domain.com/fullchain.pem" # Path to the SSL certificate file
+CertPathKey: "/etc/letsencrypt/live/your-domain.com/privkey.pem" # Path to the SSL certificate key file
 MaxUploadSize: 5368709120 # Maximum upload size limit (Default: 5GB)
-MaxExpireHours: 120 # Maximum time (in hours) before the file is deleted (Default: 120h)
-EnablePassword: false # Enable password authentication for uploads (check credentials.yaml for configuration)
-ShowUploadBox: true # Show or hide the 'upload your file'prompt on the download page
-UploadDir: "./uploads" # Set Upoads dir location
-ShowMenuDownloadPage: true # Show Menubar in downloadpage (if true add menu entry for index and upload page)
+MaxExpireHours: 72 # Maximum time (in hours) before the file is deleted (Default: 72h - 3 days)
+EnablePassword: true # Enable password authentication for uploads (check credentials.yaml for configuration)
+ShowUploadBox: true # Show or hide the 'upload your file' prompt on the download page
+UploadDir: "./uploads" # Set uploads dir location
+ShowMenuDownloadPage: true # Show Menubar in download page (if true add menu entry for index and upload page)
+
 # Configuration for login attempt rate limiting
-RateLimitPeriod: 60    # Time period (in seconds) for rate limiting login attempts
-RateLimitAttempts: 10   # Maximum number of login attempts allowed per IP during the specified period
+RateLimitPeriod: 300    # Time period (in seconds) for rate limiting login attempts (5 minutes)
+RateLimitAttempts: 5    # Maximum number of login attempts allowed per IP during the specified period
+
+# Security settings
+RequireHTTPS: true      # Redirect HTTP to HTTPS if TLS is enabled
+AllowInsecureHTTP: false # Allow HTTP connections when TLS is enabled (not recommended)
 
