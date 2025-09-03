@@ -17,3 +17,9 @@ RateLimitAttempts: 5    # Maximum number of login attempts allowed per IP during
 RequireHTTPS: true      # Redirect HTTP to HTTPS if TLS is enabled
 AllowInsecureHTTP: false # Allow HTTP connections when TLS is enabled (not recommended)
 
+# Server timeout settings (in seconds)
+ReadTimeout: 600         # Maximum duration for reading the entire request (10 minutes for large uploads)
+WriteTimeout: 600        # Maximum duration before timing out writes of the response (10 minutes for large downloads)
+IdleTimeout: 120         # Maximum amount of time to wait for the next request when keep-alives are enabled
+ReadHeaderTimeout: 30    # Amount of time allowed to read request headers
+

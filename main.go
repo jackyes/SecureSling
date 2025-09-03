@@ -8,12 +8,14 @@ import (
 	"html/template"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -30,10 +32,14 @@ const (
 
 var (
 	AppConfig    Cfg
+	rlMu         sync.RWMutex
 	rateLimiters = make(map[string]*rate.Limiter)
 	// Template caching for better performance
 	uploadTemplate   *template.Template
 	downloadTemplate *template.Template
+	// File-level mutexes to prevent race conditions on downloads
+	fileMutexes   = make(map[string]*sync.Mutex)
+	fileMutexesMu sync.Mutex
 )
 
 type UserCredentials struct {
@@ -56,6 +62,11 @@ type Cfg struct {
 	RateLimitAttempts    int    `yaml:"RateLimitAttempts"`
 	RequireHTTPS         *bool  `yaml:"RequireHTTPS"`
 	AllowInsecureHTTP    *bool  `yaml:"AllowInsecureHTTP"`
+	// Server timeout settings
+	ReadTimeout       int `yaml:"ReadTimeout"`
+	WriteTimeout      int `yaml:"WriteTimeout"`
+	IdleTimeout       int `yaml:"IdleTimeout"`
+	ReadHeaderTimeout int `yaml:"ReadHeaderTimeout"`
 }
 
 // FileInfo stores metadata about uploaded files
@@ -147,9 +158,10 @@ func httpsRedirect(next http.Handler) http.Handler {
 // Middleware to add cache headers
 func cacheMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Set Cache-Control and Expires headers for static files
-		w.Header().Set("Cache-Control", "public, max-age=86400") // 1 day
-		w.Header().Set("Expires", time.Now().AddDate(1, 0, 0).Format(http.TimeFormat))
+		// Set Cache-Control header for static files (1 day)
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		// Set Expires header to match Cache-Control (1 day)
+		w.Header().Set("Expires", time.Now().Add(24*time.Hour).Format(http.TimeFormat))
 
 		next.ServeHTTP(w, r)
 	})
@@ -186,24 +198,42 @@ func getClientIP(r *http.Request) string {
 			return ip
 		}
 	}
-	// Otherwise, return the remote IP address
-	return r.RemoteAddr
+	// Otherwise, extract IP from remote address (remove port)
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		// If SplitHostPort fails, fall back to the original RemoteAddr
+		// but log the error for debugging
+		log.Printf("Warning: Failed to split host:port from RemoteAddr %s: %v", r.RemoteAddr, err)
+		return r.RemoteAddr
+	}
+	return host
 }
 
-// Basic IP validation to prevent spoofing
+// Robust IP validation to prevent spoofing
 func isValidIP(ip string) bool {
-	// Simple validation - check if it looks like an IP address
-	// In production, you might want more robust validation
+	// Basic validation - check for empty, spaces, newlines
 	if ip == "" || strings.Contains(ip, " ") || strings.Contains(ip, "\n") {
 		return false
 	}
 
-	// Check for IPv4 or IPv6 patterns
-	if strings.Contains(ip, ":") || strings.Contains(ip, ".") {
-		return true
+	// Parse the IP to ensure it's a valid IP address
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return false
 	}
 
-	return false
+	// Reject private and reserved IP ranges that shouldn't be in X-Forwarded-For
+	// These are often used for spoofing attacks
+	if parsedIP.IsPrivate() || parsedIP.IsLoopback() || parsedIP.IsUnspecified() {
+		return false
+	}
+
+	// Reject multicast and link-local addresses
+	if parsedIP.IsMulticast() || parsedIP.IsLinkLocalUnicast() || parsedIP.IsLinkLocalMulticast() {
+		return false
+	}
+
+	return true
 }
 
 // basicAuth is a middleware function that implements basic authentication
@@ -219,11 +249,22 @@ func basicAuth(next http.HandlerFunc) http.HandlerFunc {
 		ip := getClientIP(r)
 
 		// Check to see if there is a rate limiter for this IP address
+		rlMu.RLock()
 		limiter, ok := rateLimiters[ip]
+		rlMu.RUnlock()
+
 		if !ok {
 			// Create a new rate limiter for this IP address (for example, 5 attempts per minute)
 			limiter = rate.NewLimiter(rate.Every(time.Duration(AppConfig.RateLimitPeriod)*time.Second), AppConfig.RateLimitAttempts)
-			rateLimiters[ip] = limiter
+
+			rlMu.Lock()
+			// Double-check that another goroutine hasn't created the limiter while we were waiting for the lock
+			if existingLimiter, exists := rateLimiters[ip]; exists {
+				limiter = existingLimiter
+			} else {
+				rateLimiters[ip] = limiter
+			}
+			rlMu.Unlock()
 		}
 
 		// Consume a token from the rate limiter
@@ -318,6 +359,27 @@ func formatDuration(hours int) string {
 	}
 
 	return strings.Join(durationParts, " ")
+}
+
+// getFileMutex returns a mutex for the given fileID, creating one if it doesn't exist
+func getFileMutex(fileID string) *sync.Mutex {
+	fileMutexesMu.Lock()
+	defer fileMutexesMu.Unlock()
+
+	if mutex, exists := fileMutexes[fileID]; exists {
+		return mutex
+	}
+
+	mutex := &sync.Mutex{}
+	fileMutexes[fileID] = mutex
+	return mutex
+}
+
+// cleanupFileMutex removes a mutex from the map when it's no longer needed
+func cleanupFileMutex(fileID string) {
+	fileMutexesMu.Lock()
+	defer fileMutexesMu.Unlock()
+	delete(fileMutexes, fileID)
 }
 
 // initTemplates initializes and caches templates for better performance
@@ -545,6 +607,12 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get file-specific mutex to prevent race conditions
+	fileMutex := getFileMutex(fileID)
+	fileMutex.Lock()
+	defer fileMutex.Unlock()
+	defer cleanupFileMutex(fileID)
+
 	// Open and decode file info
 	infoFilePath := filepath.Join(AppConfig.UploadDir, fileID+".json")
 	infoFile, err := os.Open(infoFilePath)
@@ -578,17 +646,12 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Increment the download count
-	fileInfo.Downloads++
-	// Update file info with new download count
-	infoFile, err = os.Create(infoFilePath)
-	if err != nil {
-		// If there's an error updating the info file, return a 500 error
-		handleError(w, "Error updating info file: "+err.Error(), "Error processing file", http.StatusInternalServerError)
+	// Check if it's a one-time download that has already been downloaded
+	if fileInfo.OneTimeDownload && fileInfo.Downloads > 0 {
+		// If it's a one-time download that's already been used, return a 410 error
+		handleError(w, "One-time download already used: "+fileID, "This file can only be downloaded once", http.StatusGone)
 		return
 	}
-	json.NewEncoder(infoFile).Encode(&fileInfo)
-	infoFile.Close()
 
 	// Open the actual file for download
 	filePath := filepath.Join(AppConfig.UploadDir, fileID)
@@ -613,6 +676,8 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", fileStat.Size()))
 
+	// Stream the file and track if successful
+	streamingSuccessful := true
 	buffer := make([]byte, bufferSize)
 	for {
 		n, err := file.Read(buffer)
@@ -620,20 +685,43 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 			if err == os.ErrClosed || err == io.EOF {
 				break
 			}
-			// If there's an error reading the file, return a 500 error
+			// If there's an error reading the file, mark streaming as failed
+			streamingSuccessful = false
 			handleError(w, "Error reading file: "+err.Error(), "Error processing file", http.StatusInternalServerError)
 			return
 		}
 		if n > 0 {
-			w.Write(buffer[:n])
-			w.(http.Flusher).Flush()
+			_, writeErr := w.Write(buffer[:n])
+			if writeErr != nil {
+				// If there's an error writing to the response, mark streaming as failed
+				streamingSuccessful = false
+				log.Printf("Error writing to response: %v", writeErr)
+				return
+			}
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
 		}
 	}
 
-	// Delete file if it's a one-time download or reached max downloads
-	if fileInfo.OneTimeDownload || (fileInfo.MaxDownloads > 0 && fileInfo.Downloads >= fileInfo.MaxDownloads) {
-		deleteFileAndMetadata(filePath, infoFilePath)
-		fmt.Println("Deleted file:", fileID)
+	// Only increment download count if streaming was successful
+	if streamingSuccessful {
+		fileInfo.Downloads++
+		// Update file info with new download count
+		infoFile, err = os.Create(infoFilePath)
+		if err != nil {
+			// Log error but don't fail the response since file was already sent
+			log.Printf("Warning: Error updating download count for %s: %v", fileID, err)
+		} else {
+			json.NewEncoder(infoFile).Encode(&fileInfo)
+			infoFile.Close()
+		}
+
+		// Delete file if it's a one-time download or reached max downloads
+		if fileInfo.OneTimeDownload || (fileInfo.MaxDownloads > 0 && fileInfo.Downloads >= fileInfo.MaxDownloads) {
+			deleteFileAndMetadata(filePath, infoFilePath)
+			fmt.Println("Deleted file:", fileID)
+		}
 	}
 }
 
@@ -700,7 +788,7 @@ func deleteFileAndMetadata(filePath, infoFilePath string) {
 }
 
 // ReadConfig reads the configuration file and populates the AppConfig struct
-func ReadConfig() {
+func ReadConfig() error {
 	configPath := "./config/config.yaml"
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		configPath = "./config.yaml"
@@ -709,9 +797,7 @@ func ReadConfig() {
 	// Open the configuration file
 	f, err := os.Open(configPath)
 	if err != nil {
-		// If there's an error, print it and exit
-		fmt.Println(err)
-		return
+		return fmt.Errorf("failed to open config file: %w", err)
 	}
 	// Defer closing the file until we're done with it
 	defer f.Close()
@@ -721,9 +807,7 @@ func ReadConfig() {
 	// Decode the YAML data into the AppConfig struct
 	err = decoder.Decode(&AppConfig)
 	if err != nil {
-		// If there's an error decoding the YAML, print it and exit
-		fmt.Println(err)
-		return
+		return fmt.Errorf("failed to decode config YAML: %w", err)
 	}
 
 	// Set default value for UploadDir if it's not specified in the config
@@ -750,6 +834,22 @@ func ReadConfig() {
 		defaultAllowInsecure := false
 		AppConfig.AllowInsecureHTTP = &defaultAllowInsecure
 	}
+
+	// Set default values for server timeouts if not specified
+	if AppConfig.ReadTimeout <= 0 {
+		AppConfig.ReadTimeout = 600 // Default to 10 minutes
+	}
+	if AppConfig.WriteTimeout <= 0 {
+		AppConfig.WriteTimeout = 600 // Default to 10 minutes
+	}
+	if AppConfig.IdleTimeout <= 0 {
+		AppConfig.IdleTimeout = 120 // Default to 2 minutes
+	}
+	if AppConfig.ReadHeaderTimeout <= 0 {
+		AppConfig.ReadHeaderTimeout = 30 // Default to 30 seconds
+	}
+
+	return nil
 }
 
 func serveDownloadPage(w http.ResponseWriter, r *http.Request) {
@@ -770,7 +870,9 @@ func serveDownloadPage(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	// Read configuration from file
-	ReadConfig()
+	if err := ReadConfig(); err != nil {
+		log.Fatal("Configuration error: ", err)
+	}
 
 	// Initialize template caching
 	if err := initTemplates(); err != nil {
@@ -811,8 +913,8 @@ func main() {
 
 	// Serve static files directly from the root URL path
 	// This allows us to serve static assets (e.g. CSS, JS, images) from the /static directory
-	// Serve static files with security and caching middleware
-	staticHandler := securityHeaders(cacheMiddleware(http.FileServer(http.Dir("./static"))))
+	// Serve static files with caching middleware only (security headers applied globally)
+	staticHandler := cacheMiddleware(http.FileServer(http.Dir("./static")))
 	r.PathPrefix("/share/").Handler(http.StripPrefix("/share", staticHandler))
 	r.PathPrefix("/").Handler(staticHandler)
 
@@ -831,15 +933,15 @@ func main() {
 		finalHandler = httpsRedirect(securedRouter)
 	}
 
-	// Start the server on port AppConfig.ServerPort with optimized settings
+	// Start the server on port AppConfig.ServerPort with configurable timeout settings
 	srv := &http.Server{
 		Handler: finalHandler,
 		Addr:    ":" + AppConfig.ServerPort,
-		// Optimized timeouts for better performance and security
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       120 * time.Second,
-		ReadHeaderTimeout: 10 * time.Second,
+		// Configurable timeouts from config.yaml
+		ReadTimeout:       time.Duration(AppConfig.ReadTimeout) * time.Second,
+		WriteTimeout:      time.Duration(AppConfig.WriteTimeout) * time.Second,
+		IdleTimeout:       time.Duration(AppConfig.IdleTimeout) * time.Second,
+		ReadHeaderTimeout: time.Duration(AppConfig.ReadHeaderTimeout) * time.Second,
 		MaxHeaderBytes:    1 << 20, // 1MB max header size
 	}
 

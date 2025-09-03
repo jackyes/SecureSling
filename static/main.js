@@ -720,6 +720,7 @@ function formatFileSize(bytes) {
 
 // Make functions available globally
 window.closePreview = closePreview;
+window.triggerFileInput = triggerFileInput;
 
 // Function to validate inputs
 function validateFiles(files) {
@@ -1246,6 +1247,12 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
     
+    // Select file button event listener
+    const selectFileButton = document.getElementById('selectFileButton');
+    if (selectFileButton) {
+        selectFileButton.addEventListener('click', triggerFileInput);
+    }
+
     // Upload button event listener
     const uploadButton = document.getElementById('uploadButton');
     if (uploadButton) {
