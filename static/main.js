@@ -389,19 +389,19 @@ async function uploadFile() {
                         if (lastUpdate > 0) {
                             const timeDiff = now - lastTime;
                             const bytesDiff = e.loaded - lastLoaded;
-                            if (timeDiff > 0) {
+                            if (timeDiff > 0 && bytesDiff > 0) {
                                 const speed = (bytesDiff * 1000) / timeDiff; // bytes per second
                                 speedText = `${(speed / 1024).toFixed(1)} KB/s`;
                             }
                         }
-                        
-                        // Update tracking variables
-                        lastUpdate = now;
-                        lastLoaded = e.loaded;
-                        lastTime = now;
 
                         uploadedBytes.textContent = `${upfileSizeText} / ${fileSizeText} - ${speedText}`;
                     });
+                    
+                    // Update tracking variables after UI update
+                    lastUpdate = now;
+                    lastLoaded = e.loaded;
+                    lastTime = now;
                 }
             };
         }
@@ -984,18 +984,23 @@ async function startFileDownload(fileID, decryptionKey, iv, filename, statusMess
             return (e) => {
                 const now = Date.now();
                 if (now - lastUpdate >= PROGRESS_UPDATE_INTERVAL && e.lengthComputable) {
+                    // Store current values before updating
+                    const currentLastUpdate = lastUpdate;
+                    const currentLastLoaded = lastLoaded;
+                    const currentLastTime = lastTime;
+                    
                     // Use requestIdleCallback for non-critical UI updates
                     if ('requestIdleCallback' in window) {
                         requestIdleCallback(() => {
-                            updateProgressUI(e, now, lastUpdate, lastLoaded, lastTime);
+                            updateProgressUI(e, now, currentLastUpdate, currentLastLoaded, currentLastTime);
                         }, { timeout: 100 });
                     } else {
                         requestAnimationFrame(() => {
-                            updateProgressUI(e, now, lastUpdate, lastLoaded, lastTime);
+                            updateProgressUI(e, now, currentLastUpdate, currentLastLoaded, currentLastTime);
                         });
                     }
                     
-                    // Update tracking variables
+                    // Update tracking variables after storing current values
                     lastUpdate = now;
                     lastLoaded = e.loaded;
                     lastTime = now;
@@ -1023,7 +1028,7 @@ async function startFileDownload(fileID, decryptionKey, iv, filename, statusMess
             if (lastUpdate > 0) {
                 const timeDiff = now - lastTime;
                 const bytesDiff = e.loaded - lastLoaded;
-                if (timeDiff > 0) {
+                if (timeDiff > 0 && bytesDiff > 0) {
                     const speed = (bytesDiff * 1000) / timeDiff; // bytes per second
                     speedText = `${(speed / 1024).toFixed(1)} KB/s`;
                 }
