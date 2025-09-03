@@ -368,6 +368,11 @@ async function uploadFile() {
             return (e) => {
                 const now = Date.now();
                 if (now - lastUpdate >= PROGRESS_UPDATE_INTERVAL && e.lengthComputable) {
+                    // Store current values before updating
+                    const currentLastUpdate = lastUpdate;
+                    const currentLastLoaded = lastLoaded;
+                    const currentLastTime = lastTime;
+                    
                     // Batch DOM updates
                     requestAnimationFrame(() => {
                         const percentComplete = (e.loaded / e.total) * 100;
@@ -386,9 +391,9 @@ async function uploadFile() {
 
                         // Calculate instantaneous speed (bytes per second)
                         let speedText = '0.0 KB/s';
-                        if (lastUpdate > 0) {
-                            const timeDiff = now - lastTime;
-                            const bytesDiff = e.loaded - lastLoaded;
+                        if (currentLastUpdate > 0) {
+                            const timeDiff = now - currentLastTime;
+                            const bytesDiff = e.loaded - currentLastLoaded;
                             if (timeDiff > 0 && bytesDiff > 0) {
                                 const speed = (bytesDiff * 1000) / timeDiff; // bytes per second
                                 speedText = `${(speed / 1024).toFixed(1)} KB/s`;
@@ -398,7 +403,7 @@ async function uploadFile() {
                         uploadedBytes.textContent = `${upfileSizeText} / ${fileSizeText} - ${speedText}`;
                     });
                     
-                    // Update tracking variables after UI update
+                    // Update tracking variables after storing current values
                     lastUpdate = now;
                     lastLoaded = e.loaded;
                     lastTime = now;
