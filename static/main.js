@@ -67,15 +67,12 @@ async function encryptFile(file) {
         
         return { encryptedContent, key, iv };
     } catch (error) {
-        // console.error("Error during encryption:", error);
-        // displayError("An error occurred during encryption.");
+        //console.error("Error during encryption:", error);
+        //displayError("An error occurred during encryption.");
         return null;
     } finally {
-        // Clean up any temporary resources
-        if (file.arrayBuffer) {
-            // Ensure file buffer is released
-            file.arrayBuffer = null;
-        }
+        // Resources are automatically cleaned up by garbage collection
+        // No manual cleanup needed for file objects
     }
 }
 
@@ -130,13 +127,27 @@ function displayNotification(message, type = NotificationType.INFO, duration = 5
     
     // Add icon based on notification type
     const icon = getNotificationIcon(type);
-    notification.innerHTML = `
-        <div class="d-flex align-items-center">
-            <span class="notification-icon me-2">${icon}</span>
-            <span class="notification-message">${message}</span>
-            <button type="button" class="btn-close ms-auto" aria-label="Close" onclick="this.parentElement.parentElement.remove()"></button>
-        </div>
-    `;
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'd-flex align-items-center';
+    
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'notification-icon me-2';
+    iconSpan.innerHTML = icon;
+    
+    const messageSpan = document.createElement('span');
+    messageSpan.className = 'notification-message';
+    messageSpan.textContent = message; // Safe from XSS
+    
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'btn-close ms-auto';
+    closeButton.setAttribute('aria-label', 'Close');
+    closeButton.onclick = () => notification.remove();
+    
+    messageDiv.appendChild(iconSpan);
+    messageDiv.appendChild(messageSpan);
+    messageDiv.appendChild(closeButton);
+    notification.appendChild(messageDiv);
     
     // Add animation for entrance
     notification.style.opacity = '0';
@@ -296,6 +307,9 @@ async function uploadFile() {
             fileToEncrypt = await compressFiles(files);
         } catch (error) {
             displayError(`Error during compression. Check if you have enough available RAM and ensure you are not trying to compress a folder, as they are not supported.`);
+            isUploading = false;
+            uploadLoading.restore();
+            selectLoading.restore();
             return;
         }
     } else {
@@ -335,6 +349,7 @@ async function uploadFile() {
 
         const progressBar = document.getElementById('progressBar');
         const progressContainer = document.getElementById('progressContainer');
+        const uploadedBytes = document.getElementById('uploadedBytes') || document.createElement('div'); // Fix missing variable
         progressContainer.classList.remove('d-none');
         updateProgressBar(progressBar, 0, 'Starting upload...');
         statusMessage.textContent = 'Uploading your encrypted file...';
@@ -348,13 +363,11 @@ async function uploadFile() {
         function createThrottledProgressHandler() {
             let lastUpdate = 0;
             let lastLoaded = 0;
-            let lastTotal = 0;
+            let lastTime = startTime;
             
             return (e) => {
                 const now = Date.now();
                 if (now - lastUpdate >= PROGRESS_UPDATE_INTERVAL && e.lengthComputable) {
-                    lastUpdate = now;
-                    
                     // Batch DOM updates
                     requestAnimationFrame(() => {
                         const percentComplete = (e.loaded / e.total) * 100;
@@ -371,10 +384,21 @@ async function uploadFile() {
                         const fileSizeText = formatSize(e.total);
                         const upfileSizeText = formatSize(e.loaded);
 
-                        // Calculate speed efficiently
-                        const timeDiff = now - startTime;
-                        const speed = timeDiff > 0 ? e.loaded / timeDiff : 0;
-                        const speedText = `${(speed / 1024).toFixed(1)} KB/s`;
+                        // Calculate instantaneous speed (bytes per second)
+                        let speedText = '0.0 KB/s';
+                        if (lastUpdate > 0) {
+                            const timeDiff = now - lastTime;
+                            const bytesDiff = e.loaded - lastLoaded;
+                            if (timeDiff > 0) {
+                                const speed = (bytesDiff * 1000) / timeDiff; // bytes per second
+                                speedText = `${(speed / 1024).toFixed(1)} KB/s`;
+                            }
+                        }
+                        
+                        // Update tracking variables
+                        lastUpdate = now;
+                        lastLoaded = e.loaded;
+                        lastTime = now;
 
                         uploadedBytes.textContent = `${upfileSizeText} / ${fileSizeText} - ${speedText}`;
                     });
@@ -454,6 +478,8 @@ async function uploadFile() {
         displayError(`Error: ${error.message}`);
         progressContainer.classList.add('d-none');
         statusMessage.removeAttribute('aria-busy');
+    } finally {
+        // Always restore state regardless of success or failure
         isUploading = false;
         uploadLoading.restore();
         selectLoading.restore();
@@ -579,6 +605,7 @@ function handleFileSelect(event) {
                 // Hide preview for multiple files and cancel any pending operations
                 if (window.previewController) {
                     window.previewController.abort();
+                    window.previewController = null; // Clean up reference
                 }
                 filePreview.classList.add('d-none');
             }
@@ -592,9 +619,14 @@ function handleFileSelect(event) {
                 uploadButton.setAttribute('aria-disabled', 'true');
             }
 
-            // Cancel any pending preview operations
+            // Cancel any pending preview operations and clean up
             if (window.previewController) {
                 window.previewController.abort();
+                window.previewController = null;
+            }
+            if (window.previewTimeout) {
+                clearTimeout(window.previewTimeout);
+                window.previewTimeout = null;
             }
         }
     });
@@ -780,10 +812,18 @@ function checkPasswordStrength(password) {
 // Function to compress files
 async function compressFiles(files) {
     const zip = new JSZip();
-    for (let i = 0; i < files.length; i++) {
-        zip.file(files[i].name, files[i]);
+    try {
+        for (let i = 0; i < files.length; i++) {
+            zip.file(files[i].name, files[i]);
+        }
+        const result = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 1 } });
+        return result;
+    } finally {
+        // Clean up JSZip instance
+        if (zip) {
+            zip.remove(/.*$/); // Remove all files from zip to free memory
+        }
     }
-    return await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 1 } });
 }
 
 
@@ -938,27 +978,32 @@ async function startFileDownload(fileID, decryptionKey, iv, filename, statusMess
         // Optimized download progress handler with better performance
         function createDownloadProgressHandler() {
             let lastUpdate = 0;
+            let lastLoaded = 0;
+            let lastTime = startTime;
             
             return (e) => {
                 const now = Date.now();
                 if (now - lastUpdate >= PROGRESS_UPDATE_INTERVAL && e.lengthComputable) {
-                    lastUpdate = now;
-                    
                     // Use requestIdleCallback for non-critical UI updates
                     if ('requestIdleCallback' in window) {
                         requestIdleCallback(() => {
-                            updateProgressUI(e, now, startTime, lastSpeedUpdate, lastLoaded);
+                            updateProgressUI(e, now, lastUpdate, lastLoaded, lastTime);
                         }, { timeout: 100 });
                     } else {
                         requestAnimationFrame(() => {
-                            updateProgressUI(e, now, startTime, lastSpeedUpdate, lastLoaded);
+                            updateProgressUI(e, now, lastUpdate, lastLoaded, lastTime);
                         });
                     }
+                    
+                    // Update tracking variables
+                    lastUpdate = now;
+                    lastLoaded = e.loaded;
+                    lastTime = now;
                 }
             };
         }
 
-        function updateProgressUI(e, now, startTime, lastSpeedUpdate, lastLoaded) {
+        function updateProgressUI(e, now, lastUpdate, lastLoaded, lastTime) {
             const percentComplete = (e.loaded / e.total) * 100;
             updateProgressBar(progressBar, percentComplete);
 
@@ -973,10 +1018,16 @@ async function startFileDownload(fileID, decryptionKey, iv, filename, statusMess
             const fileSizeText = formatSize(e.total);
             const downfileSizeText = formatSize(e.loaded);
 
-            // Calculate speed more efficiently
-            const timeDiff = now - startTime;
-            const speed = timeDiff > 0 ? e.loaded / timeDiff : 0;
-            const speedText = `${(speed / 1024).toFixed(1)} KB/s`;
+            // Calculate instantaneous speed (bytes per second)
+            let speedText = '0.0 KB/s';
+            if (lastUpdate > 0) {
+                const timeDiff = now - lastTime;
+                const bytesDiff = e.loaded - lastLoaded;
+                if (timeDiff > 0) {
+                    const speed = (bytesDiff * 1000) / timeDiff; // bytes per second
+                    speedText = `${(speed / 1024).toFixed(1)} KB/s`;
+                }
+            }
 
             downloadedBytesElement.textContent = `${downfileSizeText} / ${fileSizeText} - ${speedText}`;
         }
@@ -1191,22 +1242,16 @@ function validateInput(input, type = 'text') {
 
     switch (type) {
         case 'text':
-            // Remove any potentially dangerous characters for general text
-            return input.replace(/[&<>"']/g, function (m) {
-                return {
-                    '&': '&amp;',
-                    '<': '&lt;',
-                    '>': '&gt;',
-                    '"': '&quot;',
-                    "'": '&#39;'
-                }[m];
+            // Use pre-compiled patterns for better performance
+            return input.replace(validationPatterns.htmlEntities, function (m) {
+                return validationPatterns.entityMap.get(m) || m;
             });
         case 'filename':
-            // Remove any characters that are invalid in filenames
-            return input.replace(/[<>:"/\\|?*\x00-\x1F]/g, '');
+            // Use pre-compiled pattern for filename validation
+            return input.replace(validationPatterns.filenameInvalid, '');
         case 'number':
-            // Ensure the input is a valid number
-            if (!/^\d+$/.test(input)) {
+            // Use pre-compiled pattern for number validation
+            if (!validationPatterns.numbersOnly.test(input)) {
                 throw new Error('Input must be a valid number');
             }
             return input;
@@ -1262,13 +1307,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // File input change handler
     const fileInput = document.getElementById('fileInput');
     if (fileInput) {
-        fileInput.addEventListener('change', (event) => {
-            const fileNames = Array.from(event.target.files).map(file => file.name).join(', ');
-            const selectedFileName = document.getElementById('selectedFileName');
-            if (selectedFileName) {
-                selectedFileName.textContent = fileNames;
-            }
-        });
+        fileInput.addEventListener('change', handleFileSelect);
     }
     
     // Download button event listener (if on download page)
