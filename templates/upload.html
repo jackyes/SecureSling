@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecureSling - Upload</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" integrity="sha512-jnSuA4Ss2PkkikSOLtYs8BlYIeeIK1h99ty4YfvRPAlzr377vr3CXDb7sb7eEEBYjDtcYj+AjBH3FLv5uSJuXg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;700&display=swap" referrerpolicy="no-referrer">
     <link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
@@ -18,9 +18,14 @@
     <nav class="navbar fixed-top navbar-light">
         <div class="container">
             <a class="navbar-brand fs-3" href="#"><img src="/share/logo.webp" alt="Logo" style="height: 30px; margin-right: 10px;">SecureSling</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
+            <div class="d-flex align-items-center">
+                <button class="dark-mode-toggle me-3" id="darkModeToggle" aria-label="Toggle dark mode">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+            </div>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
@@ -39,9 +44,6 @@
             </div>
         </div>
     </nav>
-    <button class="dark-mode-toggle" id="darkModeToggle" aria-label="Toggle dark mode">
-        <i class="fas fa-moon"></i>
-    </button>
     <div class="container mt-5" id="main-content" tabindex="-1">
         <div class="logo-container display-4 animated fadeIn delay-500ms">
             <img src="/share/logo.webp" alt="Logo">
@@ -59,19 +61,27 @@
             <div class="card-body">
                 <div class="drag-drop-area mb-4" id="dragDropArea">
                     <p id="fileNameDisplay" class="mb-3" role="status" aria-live="polite">
-                        <i class="fas fa-cloud-upload-alt fa-3x" aria-hidden="true"></i>
-                        <br>
-                        <span aria-hidden="true">Drag & Drop your file here</span>
-                        <span class="sr-only">Drag and drop area for file upload. Alternatively, use the select file button.</span>
+                        <i class="fas fa-folder-plus fa-3x" aria-hidden="true"></i> <br>
+                        <span aria-hidden="true">Drag & Drop files here</span>
+                        <span class="sr-only">Drag and drop area for files upload. Alternatively, use the select buttons.</span>
                     </p>
                     <div class="divider-text"><span>or</span></div>
-                    <button id="selectFileButton" class="btn btn-primary btn-icon hover-tooltip"
-                        title="Click to select a file for upload" aria-label="Select file for upload" role="button"
-                        data-tooltip="Click to browse and select a file from your device">
-                        <i class="fas fa-file-upload"></i> Select File
-                    </button>
+                    <div class="d-flex gap-2 justify-content-center">
+                        <button id="selectFileButton" class="btn btn-primary btn-icon hover-tooltip"
+                            title="Click to select files for upload" aria-label="Select files for upload" role="button"
+                            data-tooltip="Click to browse and select files from your device">
+                            <i class="fas fa-file"></i> Select Files
+                        </button>
+                        <button id="selectFolderButton" class="btn btn-info btn-icon hover-tooltip"
+                            title="Click to select folders for upload" aria-label="Select folders for upload" role="button"
+                            data-tooltip="Click to browse and select folders from your device">
+                            <i class="fas fa-folder"></i> Select Folders
+                        </button>
+                    </div>
                     <input type="file" id="fileInput" class="form-control mb-3 sr-only" onchange="handleFileSelect(event)" multiple
-                        aria-label="File input" accept="*/*"/>
+                            aria-label="File input"/>
+                    <input type="file" id="folderInput" class="form-control mb-3 sr-only" onchange="handleFolderSelect(event)" webkitdirectory
+                           aria-label="Folder input"/>
                 </div>
                 <div id="filePreview" class="file-preview mt-3 d-none">
                     <div class="preview-header d-flex justify-content-between align-items-center mb-2">
@@ -271,26 +281,7 @@
         });
     </script>
     <script src="main.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js" integrity="sha512-7Pi/otdlbbCR+LnW+F7PwFcSDJOuUJB3OxtEHbg4vSMvzvJjde4Po1v4BR9Gdc9aXNUNFVUY+SK51wWT8WF0Gg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/js/bootstrap.bundle.min.js" integrity="sha512-HvOjJrdwNpDbkGJIG2ZNqDlVqMo77qbs4Me4cah0HoDrfhrbA+8SBlZn1KrvAQw7cILLPFJvdwIgphzQmMm+Pw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script>
-    function validateAndSubmit(event) {
-        event.preventDefault();
-        
-        const files = document.getElementById('fileInput').files;
-        const password = document.getElementById('password').value;
-        const expiryDate = document.getElementById('expiryDate').value;
-        const maxDownloads = document.getElementById('maxDownloads').value;
-
-        if (validateInputs(files, password, expiryDate, maxDownloads)) {
-            // Se la validazione passa, procedi con l'upload
-            uploadFile();
-        }
-        
-        return false;
-    }
-
-    document.getElementById('uploadButton').addEventListener('click', validateAndSubmit);
-    </script>
 </body>
 </html>

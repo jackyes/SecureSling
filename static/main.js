@@ -270,6 +270,8 @@ function updateProgressBar(progressBar, percent, text = null) {
 
 // Function to upload a file
 let isUploading = false;
+let selectedFiles = []; // Variable to store selected files
+
 async function uploadFile() {
     if (isUploading) {
         return;
@@ -283,8 +285,7 @@ async function uploadFile() {
     const uploadLoading = showLoadingState(uploadButton, 'Uploading...');
     const selectLoading = showLoadingState(selectFileButton, 'Please wait...');
 
-    const fileInput = document.getElementById('fileInput');
-    const files = fileInput.files;
+    const files = selectedFiles; // Use the shared variable
     const passwordInput = document.getElementById('password');
     const password = passwordInput ? passwordInput.value : null;
     const expiryDate = document.getElementById('expiryDate').value;
@@ -302,11 +303,20 @@ async function uploadFile() {
     statusMessage.setAttribute('aria-busy', 'true');
 
     let fileToEncrypt;
+    let originalFileName;
+
+    // Folder sharing implementation
     if (files.length > 1) {
+        statusMessage.textContent = 'Compressing files into .zip archive...';
         try {
             fileToEncrypt = await compressFiles(files);
+            // Define archive name based on the first folder
+            const firstPath = files[0].webkitRelativePath || files[0].name;
+            const folderName = firstPath.split('/')[0];
+            originalFileName = `${folderName}.zip`;
+
         } catch (error) {
-            displayError(`Error during compression. Check if you have enough available RAM and ensure you are not trying to compress a folder, as they are not supported.`);
+            displayError(`Error during compression. Make sure you have enough RAM.`);
             isUploading = false;
             uploadLoading.restore();
             selectLoading.restore();
@@ -314,6 +324,7 @@ async function uploadFile() {
         }
     } else {
         fileToEncrypt = files[0];
+        originalFileName = files[0].name;
     }
 
     try {
@@ -336,7 +347,8 @@ async function uploadFile() {
         }
 
         const exportedKey = await exportKey(key);
-        formData.append('file', new Blob([encryptedContent]), files.length === 1 ? files[0].name : 'encrypted.zip');
+        // Usa il nome del file originale (o dello zip) per l'upload
+        formData.append('file', new Blob([encryptedContent]), originalFileName);
         formData.append('oneTimeDownload', document.getElementById('oneTimeDownload').checked);
 
         if (expiryDate) {
@@ -422,7 +434,8 @@ async function uploadFile() {
                     const fileID = result.file_id;
                     const keyString = btoa(JSON.stringify(exportedKey));
                     const ivString = base64UrlEncode(iv);
-                    const fileName = encodeURIComponent(files.length === 1 ? files[0].name : 'encrypted.zip');
+                    // Nella parte di creazione del link, assicurati di usare originalFileName
+                    const fileName = encodeURIComponent(originalFileName);
                     let encodedLink;
 
                     if (password) {
@@ -566,9 +579,15 @@ function triggerFileInput() {
     document.getElementById('fileInput').click();
 }
 
+// Function to activate folder input
+function triggerFolderInput() {
+    document.getElementById('folderInput').click();
+}
+
 // Function to manage file selection with preview (optimized with better performance)
 function handleFileSelect(event) {
     const fileInput = event.target;
+    selectedFiles = fileInput.files; // Update the shared variable
     const selectedFileName = document.getElementById('selectedFileName');
     const filePreview = document.getElementById('filePreview');
     const uploadButton = document.getElementById('uploadButton');
@@ -632,6 +651,44 @@ function handleFileSelect(event) {
             if (window.previewTimeout) {
                 clearTimeout(window.previewTimeout);
                 window.previewTimeout = null;
+            }
+        }
+    });
+}
+
+// Function to handle folder selection
+function handleFolderSelect(event) {
+    const folderInput = event.target;
+    selectedFiles = folderInput.files; // Update the shared variable
+    const selectedFileName = document.getElementById('selectedFileName');
+    const uploadButton = document.getElementById('uploadButton');
+    
+    // Use requestAnimationFrame for smoother UI updates
+    requestAnimationFrame(() => {
+        if (folderInput.files.length > 0) {
+            // For folders, show the number of files selected
+            const fileCount = folderInput.files.length;
+            const folderName = folderInput.files[0].webkitRelativePath ?
+                folderInput.files[0].webkitRelativePath.split('/')[0] : 'Selected Folder';
+            
+            selectedFileName.textContent = `Selected folder: ${folderName} (${fileCount} files)`;
+            
+            // Enable upload button when folder is selected
+            if (uploadButton) {
+                uploadButton.disabled = false;
+                uploadButton.removeAttribute('aria-disabled');
+            }
+            
+            // Hide preview for folders (since it's multiple files)
+            const filePreview = document.getElementById('filePreview');
+            filePreview.classList.add('d-none');
+        } else {
+            selectedFileName.textContent = '';
+            
+            // Disable upload button when no folder is selected
+            if (uploadButton) {
+                uploadButton.disabled = true;
+                uploadButton.setAttribute('aria-disabled', 'true');
             }
         }
     });
@@ -758,10 +815,11 @@ function formatFileSize(bytes) {
 // Make functions available globally
 window.closePreview = closePreview;
 window.triggerFileInput = triggerFileInput;
+window.triggerFolderInput = triggerFolderInput;
 
 // Function to validate inputs
 function validateFiles(files) {
-    if (files.length === 0) {
+    if (!files || files.length === 0) {
         displayError('Please select a file or drag and drop a file.');
         console.log('No files selected.');
         return false;
@@ -819,8 +877,11 @@ async function compressFiles(files) {
     const zip = new JSZip();
     try {
         for (let i = 0; i < files.length; i++) {
-            zip.file(files[i].name, files[i]);
+            // Use file.webkitRelativePath if available to maintain folder structure
+            const path = files[i].webkitRelativePath || files[i].name;
+            zip.file(path, files[i]);
         }
+        // Compression level 1 for speed
         const result = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 1 } });
         return result;
     } finally {
@@ -1085,22 +1146,112 @@ async function startFileDownload(fileID, decryptionKey, iv, filename, statusMess
 // Helper function to process downloaded file
 async function processDownloadedFile(encryptedContent, decryptionKey, iv, filename, fileID, statusMessage, progressContainer, downloadLoading) {
     try {
-        const file = await decryptFile(encryptedContent, decryptionKey, iv);
-        const url = URL.createObjectURL(file);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename || 'decrypted_' + fileID;
-        a.click();
+        const decryptedBlob = await decryptFile(encryptedContent, decryptionKey, iv);
+
+        // Archive decompression handling
+        if (filename.toLowerCase().endsWith('.zip')) {
+            statusMessage.textContent = 'Archive ready for download!';
+            
+            // Show archive download options
+            const downloadAllContainer = document.getElementById('downloadAllContainer');
+            const downloadAllButton = document.getElementById('downloadAllButton');
+            const exploreArchiveButton = document.createElement('button');
+            
+            downloadAllContainer.classList.remove('d-none');
+            downloadAllButton.textContent = 'Download Complete Archive';
+            downloadAllButton.innerHTML = '<i class="fas fa-folder-download"></i> Download Complete Archive';
+            
+            // Add "Explore Archive" button
+            exploreArchiveButton.className = 'btn btn-outline-info btn-block mx-auto mt-2 btn-icon';
+            exploreArchiveButton.innerHTML = '<i class="fas fa-folder-open"></i> Explore Archive Contents';
+            exploreArchiveButton.addEventListener('click', async () => {
+                exploreArchiveButton.disabled = true;
+                exploreArchiveButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Decompressing...';
+                
+                try {
+                    statusMessage.textContent = 'Decompressing archive...';
+                    const zip = await JSZip.loadAsync(decryptedBlob);
+                    const filesContainer = document.createElement('div');
+                    filesContainer.className = 'archive-explorer mt-4';
+                    
+                    const title = document.createElement('h5');
+                    title.textContent = 'Files contained in the archive:';
+                    filesContainer.appendChild(title);
+                    
+                    const fileList = document.createElement('div');
+                    fileList.className = 'archive-file-list';
+                    filesContainer.appendChild(fileList);
+
+                    // Iterate through files in the zip
+                    for (const [relativePath, zipEntry] of Object.entries(zip.files)) {
+                        if (!zipEntry.dir) { // Ignore directories
+                            const fileContent = await zipEntry.async('blob');
+                            const url = URL.createObjectURL(fileContent);
+                            const downloadName = zipEntry.name.split('/').pop();
+                            
+                            const fileItem = document.createElement('div');
+                            fileItem.className = 'archive-file-item';
+                            
+                            const fileNameSpan = document.createElement('span');
+                            fileNameSpan.className = 'archive-file-name';
+                            fileNameSpan.textContent = relativePath;
+                            fileItem.appendChild(fileNameSpan);
+
+                            const downloadLink = document.createElement('a');
+                            downloadLink.href = url;
+                            downloadLink.download = downloadName;
+                            downloadLink.className = 'btn btn-sm btn-outline-primary archive-file-download';
+                            downloadLink.innerHTML = '<i class="fas fa-download"></i> Download';
+                            fileItem.appendChild(downloadLink);
+
+                            fileList.appendChild(fileItem);
+                        }
+                    }
+
+                    // Show individual file download links
+                    const cardBody = document.querySelector('.card-body');
+                    cardBody.appendChild(filesContainer);
+                    
+                    // Hide explore button and show success
+                    exploreArchiveButton.remove();
+                    statusMessage.textContent = 'Archive decompressed successfully!';
+                    displaySuccess('Archive decompressed! You can now download individual files.');
+                    
+                } catch (error) {
+                    displayError('Error decompressing archive: ' + error.message);
+                    exploreArchiveButton.disabled = false;
+                    exploreArchiveButton.innerHTML = '<i class="fas fa-folder-open"></i> Explore Archive Contents';
+                }
+            });
+            
+            downloadAllContainer.appendChild(exploreArchiveButton);
+            
+            // Download complete archive functionality
+            downloadAllButton.addEventListener('click', () => {
+                const url = URL.createObjectURL(decryptedBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename || 'decrypted_archive.zip';
+                a.click();
+                setTimeout(() => { URL.revokeObjectURL(url); }, 100);
+                displaySuccess('Complete archive downloaded successfully!');
+            });
+
+            progressContainer.classList.add('d-none');
+            
+        } else {
+            // Normal behavior for single files
+            const url = URL.createObjectURL(decryptedBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename || 'decrypted_' + fileID;
+            a.click();
+            setTimeout(() => { URL.revokeObjectURL(url); }, 100);
+            statusMessage.textContent = 'File downloaded and decrypted successfully!';
+            progressContainer.classList.add('d-none');
+            displaySuccess('File downloaded successfully!');
+        }
         
-        // Use setTimeout to ensure download starts before revoking URL
-        setTimeout(() => {
-            URL.revokeObjectURL(url);
-        }, 100);
-        
-        statusMessage.textContent = 'File downloaded and decrypted successfully!';
-        statusMessage.removeAttribute('aria-busy');
-        progressContainer.classList.add('d-none');
-        displaySuccess('File downloaded successfully!');
     } catch (error) {
         throw error;
     } finally {
@@ -1296,6 +1447,18 @@ document.addEventListener("DOMContentLoaded", () => {
         dragDropArea.addEventListener('drop', (e) => {
             e.preventDefault();
             dragDropArea.classList.remove('drag-over');
+            
+            // Handle folder drag & drop
+            const items = e.dataTransfer.items;
+            if (items && items.length > 0) {
+                // Check if it's a directory by looking at webkitGetAsEntry
+                const entry = items[0].webkitGetAsEntry();
+                if (entry && entry.isDirectory) {
+                    displayError('Please use the "Select Files/Folders" button to upload folders. Direct folder drag & drop is not supported in all browsers.');
+                    return;
+                }
+            }
+            
             const files = e.dataTransfer.files;
             document.getElementById('fileInput').files = files;
             handleFileSelect({ target: document.getElementById('fileInput') });
@@ -1308,6 +1471,12 @@ document.addEventListener("DOMContentLoaded", () => {
         selectFileButton.addEventListener('click', triggerFileInput);
     }
 
+    // Select folder button event listener
+    const selectFolderButton = document.getElementById('selectFolderButton');
+    if (selectFolderButton) {
+        selectFolderButton.addEventListener('click', triggerFolderInput);
+    }
+
     // Upload button event listener
     const uploadButton = document.getElementById('uploadButton');
     if (uploadButton) {
@@ -1318,6 +1487,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const fileInput = document.getElementById('fileInput');
     if (fileInput) {
         fileInput.addEventListener('change', handleFileSelect);
+    }
+
+    // Folder input change handler
+    const folderInput = document.getElementById('folderInput');
+    if (folderInput) {
+        folderInput.addEventListener('change', handleFolderSelect);
     }
     
     // Download button event listener (if on download page)
