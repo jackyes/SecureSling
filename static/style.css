@@ -1,3 +1,5 @@
+/* Typography Foundation */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 :root {
     /* Modern Color Palette - Primary */
     --primary-50: #eff6ff;
@@ -67,12 +69,12 @@
     --warning-color: var(--warning-500);
     
     /* Enhanced Shadows */
-    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    --shadow-xs: 0 2px 4px rgba(0, 0, 0, 0.1);
+    --shadow-sm: 0 3px 6px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.12);
+    --shadow-md: 0 6px 10px -2px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 15px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    --shadow-xl: 0 25px 35px -10px rgba(0, 0, 0, 0.25), 0 15px 15px -10px rgba(0, 0, 0, 0.1);
+    --shadow-2xl: 0 35px 60px -15px rgba(0, 0, 0, 0.35);
     
     /* Enhanced Transitions */
     --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
@@ -133,9 +135,9 @@
         --input-bg: #3d3d3d;
         
         /* Adjust shadows for dark mode */
-        --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
-        --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
-        --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+        --shadow-sm: 0 4px 10px rgba(0, 0, 0, 0.4);
+        --shadow-md: 0 8px 18px rgba(0, 0, 0, 0.45);
+        --shadow-lg: 0 12px 30px rgba(0, 0, 0, 0.5);
     }
 }
 
@@ -148,13 +150,10 @@
     --border-color: #404040;
     --card-bg: #2d2d2d;
     --input-bg: #3d3d3d;
-    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 4px 10px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 8px 18px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 12px 30px rgba(0, 0, 0, 0.5);
 }
-
-/* Typography Foundation */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 body {
     background: var(--bg-primary);
@@ -171,6 +170,43 @@ body {
     transition: var(--transition);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+}
+
+/* Parallax effect for the background */
+.parallax-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 120%;
+    background: linear-gradient(135deg,
+        var(--primary-50) 0%,
+        var(--secondary-50) 25%,
+        var(--primary-100) 50%,
+        var(--secondary-100) 75%,
+        var(--primary-50) 100%);
+    z-index: -10;
+    will-change: transform;
+    animation: parallaxFloat 20s infinite linear;
+}
+
+@keyframes parallaxFloat {
+    0% { transform: translateY(0) rotate(0deg); }
+    25% { transform: translateY(-20px) rotate(0.5deg); }
+    50% { transform: translateY(-10px) rotate(-0.3deg); }
+    75% { transform: translateY(-30px) rotate(0.8deg); }
+    100% { transform: translateY(0) rotate(0deg); }
+}
+
+/* Hides the parallax effect in dark mode */
+.dark-mode .parallax-bg {
+    display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+    .parallax-bg {
+        display: none;
+    }
 }
 
 /* Enhanced Typography Scale */

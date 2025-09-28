@@ -29,6 +29,7 @@
     <link rel="manifest" href="/share/site.webmanifest">
 </head>
 <body>
+    <div class="parallax-bg"></div>
     <a href="#main-content" class="skip-link">Skip to main content</a>
     <nav class="navbar fixed-top navbar-light">
         <div class="container">
@@ -44,16 +45,24 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link active" aria-current="page" href="#">Home</a>
+                        <a class="nav-link active" aria-current="page" href="#">
+                            <i class="fas fa-home me-1"></i> Home
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="upload.html">Upload</a>
+                        <a class="nav-link" href="upload.html">
+                            <i class="fas fa-upload me-1"></i> Upload
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="download.html">Download</a>
+                        <a class="nav-link" href="download.html">
+                            <i class="fas fa-download me-1"></i> Download
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="help.html">Help</a>
+                        <a class="nav-link" href="help.html">
+                            <i class="fas fa-question-circle me-1"></i> Help
+                        </a>
                     </li>
                 </ul>
             </div>
@@ -130,9 +139,9 @@
                         <div class="process-steps my-4">
                             <h6 class="mb-3">Here's how it works:</h6>
                             <ul>
-                                <li>Before uploading, your files are encrypted using AES-GCM with a 256-bit key, a state-of-the-art encryption standard.</li>
-                                <li>Only the encrypted version of your files is uploaded to the server.</li>
-                                <li>When downloading, the encrypted files are decrypted on your device using the decryption key you provided.</li>
+                                <li><i class="fas fa-lock me-2" style="color: var(--primary-color);"></i>Before uploading, your files are encrypted using AES-GCM with a 256-bit key, a state-of-the-art encryption standard.</li>
+                                <li><i class="fas fa-shield-alt me-2" style="color: var(--primary-color);"></i>Only the encrypted version of your files is uploaded to the server.</li>
+                                <li><i class="fas fa-unlock me-2" style="color: var(--primary-color);"></i>When downloading, the encrypted files are decrypted on your device using the decryption key you provided.</li>
                             </ul>
                         </div>
                         <div class="card bg-light p-3 mb-0 mt-3">
@@ -168,10 +177,10 @@
                                             <li>Drag and drop your file into the upload area or click "Select File"</li>
                                             <li>Optionally set advanced options:
                                                 <ul>
-                                                    <li><strong>One-time download:</strong> File can only be downloaded once</li>
-                                                    <li><strong>Password:</strong> Add encryption password (recommended)</li>
-                                                    <li><strong>Expiration date:</strong> Set when the file should expire</li>
-                                                    <li><strong>Max downloads:</strong> Limit number of downloads</li>
+                                                    <li><i class="fas fa-download me-2" style="color: var(--primary-color);"></i><strong>One-time download:</strong> File can only be downloaded once</li>
+                                                    <li><i class="fas fa-lock me-2" style="color: var(--primary-color);"></i><strong>Password:</strong> Add encryption password (recommended)</li>
+                                                    <li><i class="fas fa-calendar-alt me-2" style="color: var(--primary-color);"></i><strong>Expiration date:</strong> Set when the file should expire</li>
+                                                    <li><i class="fas fa-sort-numeric-up me-2" style="color: var(--primary-color);"></i><strong>Max downloads:</strong> Limit number of downloads</li>
                                                 </ul>
                                             </li>
                                             <li>Click "Upload File" to encrypt and upload your file</li>
@@ -208,23 +217,23 @@
                                     <div class="accordion-body">
                                         <h6>End-to-End Encryption</h6>
                                         <ul>
-                                            <li>Files are encrypted with AES-GCM 256-bit encryption</li>
-                                            <li>Encryption/decryption happens entirely in your browser</li>
-                                            <li>The server never sees your unencrypted files</li>
+                                            <li><i class="fas fa-shield-alt me-2" style="color: var(--success-color);"></i>Files are encrypted with AES-GCM 256-bit encryption</li>
+                                            <li><i class="fas fa-laptop-code me-2" style="color: var(--success-color);"></i>Encryption/decryption happens entirely in your browser</li>
+                                            <li><i class="fas fa-server me-2" style="color: var(--success-color);"></i>The server never sees your unencrypted files</li>
                                         </ul>
                                         
                                         <h6>Privacy Protection</h6>
                                         <ul>
-                                            <li>No file content is stored on the server</li>
-                                            <li>One-time downloads prevent unauthorized access</li>
-                                            <li>Automatic expiration ensures files don't remain indefinitely</li>
+                                            <li><i class="fas fa-database me-2" style="color: var(--primary-color);"></i>No file content is stored on the server</li>
+                                            <li><i class="fas fa-user-shield me-2" style="color: var(--primary-color);"></i>One-time downloads prevent unauthorized access</li>
+                                            <li><i class="fas fa-clock me-2" style="color: var(--primary-color);"></i>Automatic expiration ensures files don't remain indefinitely</li>
                                         </ul>
                                         
                                         <h6>Best Practices</h6>
                                         <ul>
-                                            <li>Always use strong passwords for sensitive files</li>
-                                            <li>Enable one-time download for maximum security</li>
-                                            <li>Set reasonable expiration dates</li>
+                                            <li><i class="fas fa-key me-2" style="color: var(--warning-color);"></i>Always use strong passwords for sensitive files</li>
+                                            <li><i class="fas fa-download me-2" style="color: var(--warning-color);"></i>Enable one-time download for maximum security</li>
+                                            <li><i class="fas fa-calendar-check me-2" style="color: var(--warning-color);"></i>Set reasonable expiration dates</li>
                                         </ul>
                                     </div>
                                 </div>
@@ -239,10 +248,10 @@
                                     <div class="accordion-body">
                                         <h6>Common Issues</h6>
                                         <ul>
-                                            <li><strong>File too large:</strong> Check maximum file size limit</li>
-                                            <li><strong>Invalid password:</strong> Ensure you're using the correct encryption password</li>
-                                            <li><strong>File expired:</strong> Check if the file has passed its expiration date</li>
-                                            <li><strong>Download limit reached:</strong> File may have reached maximum download count</li>
+                                            <li><i class="fas fa-file-excel me-2" style="color: var(--error-color);"></i><strong>File too large:</strong> Check maximum file size limit</li>
+                                            <li><i class="fas fa-key me-2" style="color: var(--error-color);"></i><strong>Invalid password:</strong> Ensure you're using the correct encryption password</li>
+                                            <li><i class="fas fa-calendar-times me-2" style="color: var(--error-color);"></i><strong>File expired:</strong> Check if the file has passed its expiration date</li>
+                                            <li><i class="fas fa-ban me-2" style="color: var(--error-color);"></i><strong>Download limit reached:</strong> File may have reached maximum download count</li>
                                         </ul>
                                         
                                         <h6>Getting Help</h6>

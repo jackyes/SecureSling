@@ -30,6 +30,7 @@
     <link rel="manifest" href="/share/site.webmanifest">
 </head>
 <body>
+    <div class="parallax-bg"></div>
     <a href="#main-content" class="skip-link">Skip to main content</a>
     <nav class="navbar fixed-top navbar-light">
         <div class="container">
@@ -45,16 +46,24 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link" aria-current="page" href="index.html">Home</a>
+                        <a class="nav-link" aria-current="page" href="index.html">
+                            <i class="fas fa-home me-1"></i> Home
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="upload.html">Upload</a>
+                        <a class="nav-link" href="upload.html">
+                            <i class="fas fa-upload me-1"></i> Upload
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="download.html">Download</a>
+                        <a class="nav-link" href="download.html">
+                            <i class="fas fa-download me-1"></i> Download
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link active" href="help.html">Help</a>
+                        <a class="nav-link active" href="help.html">
+                            <i class="fas fa-question-circle me-1"></i> Help
+                        </a>
                     </li>
                 </ul>
             </div>
@@ -237,9 +246,9 @@
                             <div class="card-body">
                                 <h6><i class="fas fa-lock me-2 text-success"></i>End-to-End Encryption</h6>
                                 <ul class="small">
-                                    <li>AES-GCM 256-bit encryption</li>
-                                    <li>Encryption happens in your browser</li>
-                                    <li>Server only stores encrypted files</li>
+                                    <li><i class="fas fa-shield-alt me-2" style="color: var(--success-color);"></i>AES-GCM 256-bit encryption</li>
+                                    <li><i class="fas fa-laptop-code me-2" style="color: var(--success-color);"></i>Encryption happens in your browser</li>
+                                    <li><i class="fas fa-server me-2" style="color: var(--success-color);"></i>Server only stores encrypted files</li>
                                 </ul>
                             </div>
                         </div>
@@ -249,9 +258,9 @@
                             <div class="card-body">
                                 <h6><i class="fas fa-user-shield me-2 text-primary"></i>Privacy Features</h6>
                                 <ul class="small">
-                                    <li>No file content access by server</li>
-                                    <li>One-time download option</li>
-                                    <li>Automatic file expiration</li>
+                                    <li><i class="fas fa-database me-2" style="color: var(--primary-color);"></i>No file content access by server</li>
+                                    <li><i class="fas fa-user-shield me-2" style="color: var(--primary-color);"></i>One-time download option</li>
+                                    <li><i class="fas fa-clock me-2" style="color: var(--primary-color);"></i>Automatic file expiration</li>
                                 </ul>
                             </div>
                         </div>
@@ -260,11 +269,11 @@
 
                 <h6 class="mt-4">Security Best Practices</h6>
                 <ul>
-                    <li>Use strong, unique passwords for each file</li>
-                    <li>Enable one-time download for sensitive files</li>
-                    <li>Set reasonable expiration dates</li>
-                    <li>Share download links securely (e.g., encrypted messaging)</li>
-                    <li>Verify the recipient's identity before sharing sensitive files</li>
+                    <li><i class="fas fa-key me-2" style="color: var(--warning-color);"></i>Use strong, unique passwords for each file</li>
+                    <li><i class="fas fa-user-shield me-2" style="color: var(--warning-color);"></i>Enable one-time download for sensitive files</li>
+                    <li><i class="fas fa-calendar-check me-2" style="color: var(--warning-color);"></i>Set reasonable expiration dates</li>
+                    <li><i class="fas fa-share-alt me-2" style="color: var(--warning-color);"></i>Share download links securely (e.g., encrypted messaging)</li>
+                    <li><i class="fas fa-user-check me-2" style="color: var(--warning-color);"></i>Verify the recipient's identity before sharing sensitive files</li>
                 </ul>
             </div>
         </div>
