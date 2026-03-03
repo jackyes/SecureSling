@@ -240,19 +240,10 @@
             });
 
             passwordInput.addEventListener('input', function() {
+                // checkPasswordStrength is defined in main.js
                 const strength = checkPasswordStrength(this.value);
                 updatePasswordStrengthUI(strength);
             });
-
-            function checkPasswordStrength(password) {
-                let strength = 0;
-                if (password.length >= 8) strength++;
-                if (password.match(/[a-z]+/)) strength++;
-                if (password.match(/[A-Z]+/)) strength++;
-                if (password.match(/[0-9]+/)) strength++;
-                if (password.match(/[^a-zA-Z0-9]+/)) strength++;
-                return strength;
-            }
 
             function updatePasswordStrengthUI(strength) {
                 const width = (strength / 5) * 100;

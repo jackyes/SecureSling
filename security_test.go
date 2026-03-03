@@ -44,7 +44,8 @@ func TestIsValidIP(t *testing.T) {
 		ip       string
 		expected bool
 	}{
-		{"Valid IPv4", "192.168.1.1", true},
+		{"Private IPv4 rejected", "192.168.1.1", false},
+		{"Valid public IPv4", "203.0.113.50", true},
 		{"Valid IPv6", "2001:0db8:85a3:0000:0000:8a2e:0370:7334", true},
 		{"Empty IP", "", false},
 		{"Space in IP", "192.168.1.1 ", false},

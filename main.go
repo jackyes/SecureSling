@@ -30,16 +30,23 @@ const (
 	maxFileIDLength = 100
 )
 
+type rateLimiterEntry struct {
+	limiter  *rate.Limiter
+	lastSeen time.Time
+}
+
 var (
 	AppConfig    Cfg
 	rlMu         sync.RWMutex
-	rateLimiters = make(map[string]*rate.Limiter)
+	rateLimiters = make(map[string]*rateLimiterEntry)
 	// Template caching for better performance
 	uploadTemplate   *template.Template
 	downloadTemplate *template.Template
 	// File-level mutexes to prevent race conditions on downloads
 	fileMutexes   = make(map[string]*sync.Mutex)
 	fileMutexesMu sync.Mutex
+	// Pre-compiled regex for file ID validation
+	validFileIDRegex = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 )
 
 type UserCredentials struct {
@@ -172,8 +179,6 @@ func isValidFileID(fileID string) bool {
 	if fileID == "" || len(fileID) > maxFileIDLength {
 		return false
 	}
-	// Allow dot in fileID (e.g., upload-12345.enc), still prevent path traversal (no slashes)
-	validFileIDRegex := regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 	return validFileIDRegex.MatchString(fileID)
 }
 
@@ -250,25 +255,28 @@ func basicAuth(next http.HandlerFunc) http.HandlerFunc {
 
 		// Check to see if there is a rate limiter for this IP address
 		rlMu.RLock()
-		limiter, ok := rateLimiters[ip]
+		entry, ok := rateLimiters[ip]
 		rlMu.RUnlock()
 
 		if !ok {
-			// Create a new rate limiter for this IP address (for example, 5 attempts per minute)
-			limiter = rate.NewLimiter(rate.Every(time.Duration(AppConfig.RateLimitPeriod)*time.Second), AppConfig.RateLimitAttempts)
+			// Create a new rate limiter for this IP address
+			limiter := rate.NewLimiter(rate.Every(time.Duration(AppConfig.RateLimitPeriod)*time.Second), AppConfig.RateLimitAttempts)
+			entry = &rateLimiterEntry{limiter: limiter, lastSeen: time.Now()}
 
 			rlMu.Lock()
 			// Double-check that another goroutine hasn't created the limiter while we were waiting for the lock
-			if existingLimiter, exists := rateLimiters[ip]; exists {
-				limiter = existingLimiter
+			if existingEntry, exists := rateLimiters[ip]; exists {
+				entry = existingEntry
 			} else {
-				rateLimiters[ip] = limiter
+				rateLimiters[ip] = entry
 			}
 			rlMu.Unlock()
+		} else {
+			entry.lastSeen = time.Now()
 		}
 
 		// Consume a token from the rate limiter
-		if !limiter.Allow() {
+		if !entry.limiter.Allow() {
 			// If there are no tokens available, return a 429 Too Many Requests error
 			http.Error(w, "Too many requests", http.StatusTooManyRequests)
 			return
@@ -292,7 +300,11 @@ func basicAuth(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Decode the credentials from base64
-		payload, _ := base64.StdEncoding.DecodeString(parts[1])
+		payload, err := base64.StdEncoding.DecodeString(parts[1])
+		if err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		pair := strings.SplitN(string(payload), ":", 2)
 
 		if len(pair) != 2 || !validateCredentials(pair[0], pair[1]) {
@@ -375,6 +387,18 @@ func getFileMutex(fileID string) *sync.Mutex {
 	return mutex
 }
 
+// cleanupRateLimiters removes rate limiters that haven't been used recently
+func cleanupRateLimiters() {
+	rlMu.Lock()
+	defer rlMu.Unlock()
+	maxAge := time.Duration(AppConfig.RateLimitPeriod*2) * time.Second
+	for ip, entry := range rateLimiters {
+		if time.Since(entry.lastSeen) > maxAge {
+			delete(rateLimiters, ip)
+		}
+	}
+}
+
 // cleanupFileMutex removes a mutex from the map when it's no longer needed
 func cleanupFileMutex(fileID string) {
 	fileMutexesMu.Lock()
@@ -430,6 +454,10 @@ func serveUploadPage(w http.ResponseWriter, r *http.Request) {
 func validateExpiryDate(expiryDate time.Time) error {
 	if expiryDate.Before(time.Now()) {
 		return fmt.Errorf("expiry date must be in the future")
+	}
+	maxExpiry := time.Now().Add(time.Duration(AppConfig.MaxExpireHours) * time.Hour)
+	if expiryDate.After(maxExpiry) {
+		return fmt.Errorf("expiry date cannot exceed %d hours from now", AppConfig.MaxExpireHours)
 	}
 	return nil
 }
@@ -518,8 +546,10 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 			buf.ReadFrom(part)
 			expiryDate, err = time.Parse("2006-01-02", buf.String())
 			if err != nil {
-				tempFile.Close()
-				os.Remove(tempFilePath) // Clean up the temp file on error
+				if tempFile != nil {
+					tempFile.Close()
+					os.Remove(tempFilePath)
+				}
 				handleError(w, "Invalid date format: "+buf.String(), "Invalid date format. Use YYYY-MM-DD.", http.StatusBadRequest)
 				return
 			}
@@ -529,8 +559,10 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 			buf.ReadFrom(part)
 			maxDownloads, err = strconv.Atoi(buf.String())
 			if err != nil {
-				tempFile.Close()
-				os.Remove(tempFilePath) // Clean up the temp file on error
+				if tempFile != nil {
+					tempFile.Close()
+					os.Remove(tempFilePath)
+				}
 				handleError(w, "Invalid max downloads value: "+buf.String(), "Invalid max downloads value", http.StatusBadRequest)
 				return
 			}
@@ -611,7 +643,6 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 	fileMutex := getFileMutex(fileID)
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
-	defer cleanupFileMutex(fileID)
 
 	// Open and decode file info
 	infoFilePath := filepath.Join(AppConfig.UploadDir, fileID+".json")
@@ -777,14 +808,15 @@ func deleteOldFiles() {
 func deleteFileAndMetadata(filePath, infoFilePath string) {
 	// Attempt to delete the file
 	if err := os.Remove(filePath); err != nil {
-		// If there's an error deleting the file, print a message with the file path and error
 		fmt.Println("Error deleting file:", filePath, err)
 	}
 	// Attempt to delete the metadata file
 	if err := os.Remove(infoFilePath); err != nil {
-		// If there's an error deleting the metadata file, print a message with the file path and error
 		fmt.Println("Error deleting metadata file:", infoFilePath, err)
 	}
+	// Clean up the file mutex now that the file is gone
+	fileID := filepath.Base(filePath)
+	cleanupFileMutex(fileID)
 }
 
 // ReadConfig reads the configuration file and populates the AppConfig struct
@@ -922,6 +954,7 @@ func main() {
 	// This ensures that old files are automatically removed from the system
 	c := cron.New()
 	c.AddFunc("@hourly", deleteOldFiles)
+	c.AddFunc("@every 5m", cleanupRateLimiters)
 	c.Start()
 
 	// Apply security headers to all routes

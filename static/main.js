@@ -937,12 +937,20 @@ async function downloadFile() {
     const downloadButton = document.getElementById('downloadButton');
     const downloadLoading = showLoadingState(downloadButton, 'Preparing download...');
 
-    const hashParams = new URLSearchParams(atob(window.location.hash.substring(1)));
-    const fileID = hashParams.get('fileID');
-    const salt = hashParams.has('salt') ? base64UrlDecode(hashParams.get('salt')) : null;
-    const key = hashParams.has('key') ? JSON.parse(atob(hashParams.get('key'))) : null;
-    const iv = base64UrlDecode(hashParams.get('iv'));
-    const filename = decodeURIComponent(hashParams.get('filename'));
+    let hashParams, fileID, salt, key, iv, filename;
+    try {
+        hashParams = new URLSearchParams(atob(window.location.hash.substring(1)));
+        fileID = hashParams.get('fileID');
+        salt = hashParams.has('salt') ? base64UrlDecode(hashParams.get('salt')) : null;
+        key = hashParams.has('key') ? JSON.parse(atob(hashParams.get('key'))) : null;
+        iv = base64UrlDecode(hashParams.get('iv'));
+        filename = decodeURIComponent(hashParams.get('filename'));
+    } catch (error) {
+        displayError("Invalid or corrupted download link.");
+        isDownloading = false;
+        downloadLoading.restore();
+        return;
+    }
 
     const statusMessage = document.getElementById('statusMessage');
     const downloadedBytesElement = document.getElementById('downloadedBytes');
@@ -971,6 +979,10 @@ async function downloadFile() {
                 // Handle Enter key press
                 enterHandler = (event) => {
                     if (event.key === 'Enter') {
+                        if (passwordInput.value === "") {
+                            displayError("Password can't be empty.");
+                            return;
+                        }
                         cleanup();
                         resolve(passwordInput.value);
                     }
