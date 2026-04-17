@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -32,7 +33,14 @@ const (
 
 type rateLimiterEntry struct {
 	limiter  *rate.Limiter
-	lastSeen time.Time
+	lastSeen atomic.Int64 // Unix nano; accessed lock-free
+}
+
+// fileMutexEntry wraps a per-file mutex with a reference count so that
+// the entry can be safely removed from the map when no goroutines hold it.
+type fileMutexEntry struct {
+	mu       sync.Mutex
+	refCount int
 }
 
 var (
@@ -43,7 +51,7 @@ var (
 	uploadTemplate   *template.Template
 	downloadTemplate *template.Template
 	// File-level mutexes to prevent race conditions on downloads
-	fileMutexes   = make(map[string]*sync.Mutex)
+	fileMutexes   = make(map[string]*fileMutexEntry)
 	fileMutexesMu sync.Mutex
 	// Pre-compiled regex for file ID validation
 	validFileIDRegex = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
@@ -152,9 +160,11 @@ func httpsRedirect(next http.Handler) http.Handler {
 		allowInsecure := AppConfig.AllowInsecureHTTP != nil && *AppConfig.AllowInsecureHTTP
 
 		if AppConfig.EnableTLS && requireHTTPS && !allowInsecure && r.TLS == nil {
-			// Redirect to HTTPS
+			// Redirect to HTTPS. Use 308 (Permanent Redirect) rather than 301
+			// (Moved Permanently) so that POST uploads preserve their method
+			// and body instead of being downgraded to GET by the client.
 			httpsURL := "https://" + r.Host + r.URL.String()
-			http.Redirect(w, r, httpsURL, http.StatusMovedPermanently)
+			http.Redirect(w, r, httpsURL, http.StatusPermanentRedirect)
 			return
 		}
 
@@ -261,7 +271,8 @@ func basicAuth(next http.HandlerFunc) http.HandlerFunc {
 		if !ok {
 			// Create a new rate limiter for this IP address
 			limiter := rate.NewLimiter(rate.Every(time.Duration(AppConfig.RateLimitPeriod)*time.Second), AppConfig.RateLimitAttempts)
-			entry = &rateLimiterEntry{limiter: limiter, lastSeen: time.Now()}
+			entry = &rateLimiterEntry{limiter: limiter}
+			entry.lastSeen.Store(time.Now().UnixNano())
 
 			rlMu.Lock()
 			// Double-check that another goroutine hasn't created the limiter while we were waiting for the lock
@@ -271,9 +282,9 @@ func basicAuth(next http.HandlerFunc) http.HandlerFunc {
 				rateLimiters[ip] = entry
 			}
 			rlMu.Unlock()
-		} else {
-			entry.lastSeen = time.Now()
 		}
+		// Always refresh lastSeen with atomic store — safe under RLock.
+		entry.lastSeen.Store(time.Now().UnixNano())
 
 		// Consume a token from the rate limiter
 		if !entry.limiter.Allow() {
@@ -373,18 +384,36 @@ func formatDuration(hours int) string {
 	return strings.Join(durationParts, " ")
 }
 
-// getFileMutex returns a mutex for the given fileID, creating one if it doesn't exist
-func getFileMutex(fileID string) *sync.Mutex {
+// acquireFileMutex returns (and increments the refcount for) the mutex entry
+// associated with fileID. The caller MUST pair this with releaseFileMutex to
+// avoid leaking entries. Reference counting prevents the race where an entry
+// is deleted while another goroutine still holds a pointer to it and a third
+// goroutine later creates a fresh entry under the same fileID — which would
+// allow concurrent writers on the same underlying file.
+func acquireFileMutex(fileID string) *fileMutexEntry {
 	fileMutexesMu.Lock()
 	defer fileMutexesMu.Unlock()
 
-	if mutex, exists := fileMutexes[fileID]; exists {
-		return mutex
+	entry, exists := fileMutexes[fileID]
+	if !exists {
+		entry = &fileMutexEntry{}
+		fileMutexes[fileID] = entry
 	}
+	entry.refCount++
+	return entry
+}
 
-	mutex := &sync.Mutex{}
-	fileMutexes[fileID] = mutex
-	return mutex
+// releaseFileMutex decrements the refcount of the entry and removes it from
+// the map when no other goroutine is waiting on it. Must be called exactly
+// once per acquireFileMutex call.
+func releaseFileMutex(fileID string, entry *fileMutexEntry) {
+	fileMutexesMu.Lock()
+	defer fileMutexesMu.Unlock()
+
+	entry.refCount--
+	if entry.refCount <= 0 {
+		delete(fileMutexes, fileID)
+	}
 }
 
 // cleanupRateLimiters removes rate limiters that haven't been used recently
@@ -392,18 +421,13 @@ func cleanupRateLimiters() {
 	rlMu.Lock()
 	defer rlMu.Unlock()
 	maxAge := time.Duration(AppConfig.RateLimitPeriod*2) * time.Second
+	now := time.Now()
 	for ip, entry := range rateLimiters {
-		if time.Since(entry.lastSeen) > maxAge {
+		lastSeen := time.Unix(0, entry.lastSeen.Load())
+		if now.Sub(lastSeen) > maxAge {
 			delete(rateLimiters, ip)
 		}
 	}
-}
-
-// cleanupFileMutex removes a mutex from the map when it's no longer needed
-func cleanupFileMutex(fileID string) {
-	fileMutexesMu.Lock()
-	defer fileMutexesMu.Unlock()
-	delete(fileMutexes, fileID)
 }
 
 // initTemplates initializes and caches templates for better performance
@@ -593,22 +617,12 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 		Downloads:       0,
 	}
 
-	// Save file info to JSON file
-	infoFile, err := os.Create(filepath.Join(AppConfig.UploadDir, fileInfo.FileID+".json"))
-	if err != nil {
+	// Save file info to JSON atomically (temp file + rename).
+	infoFilePath := filepath.Join(AppConfig.UploadDir, fileInfo.FileID+".json")
+	if err := writeFileInfoAtomic(infoFilePath, &fileInfo); err != nil {
 		tempFile.Close()
 		os.Remove(tempFilePath) // Clean up the temp file on error
-		handleError(w, "Error creating info file: "+err.Error(), "Error processing file", http.StatusInternalServerError)
-		return
-	}
-	defer infoFile.Close()
-
-	err = json.NewEncoder(infoFile).Encode(fileInfo)
-	if err != nil {
-		tempFile.Close()
-		os.Remove(tempFilePath)                                                // Clean up the temp file on error
-		os.Remove(filepath.Join(AppConfig.UploadDir, fileInfo.FileID+".json")) // Clean up the JSON file on error
-		handleError(w, "Error encoding JSON file: "+err.Error(), "Error processing file", http.StatusInternalServerError)
+		handleError(w, "Error writing info file: "+err.Error(), "Error processing file", http.StatusInternalServerError)
 		return
 	}
 
@@ -616,15 +630,18 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 	jsonResponse, err := json.Marshal(fileInfo)
 	if err != nil {
 		tempFile.Close()
-		os.Remove(tempFilePath)                                                // Clean up the temp file on error
-		os.Remove(filepath.Join(AppConfig.UploadDir, fileInfo.FileID+".json")) // Clean up the JSON file on error
+		os.Remove(tempFilePath) // Clean up the temp file on error
+		os.Remove(infoFilePath) // Clean up the JSON file on error
 		handleError(w, "Error creating JSON response: "+err.Error(), "Error processing file", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonResponse)
-	fmt.Println("File uploaded successfully:", fileInfo.FileID)
+	if _, err := w.Write(jsonResponse); err != nil {
+		log.Printf("Error writing upload response for %s: %v", fileInfo.FileID, err)
+		return
+	}
+	log.Printf("File uploaded successfully: %s", fileInfo.FileID)
 }
 
 // downloadFile handles the file download process
@@ -639,10 +656,14 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get file-specific mutex to prevent race conditions
-	fileMutex := getFileMutex(fileID)
-	fileMutex.Lock()
-	defer fileMutex.Unlock()
+	// Get file-specific mutex to prevent race conditions. Reference counting
+	// ensures the entry isn't reclaimed while peer goroutines still hold it.
+	entry := acquireFileMutex(fileID)
+	entry.mu.Lock()
+	defer func() {
+		entry.mu.Unlock()
+		releaseFileMutex(fileID, entry)
+	}()
 
 	// Open and decode file info
 	infoFilePath := filepath.Join(AppConfig.UploadDir, fileID+".json")
@@ -702,58 +723,71 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reserve the download slot BEFORE streaming. If we only incremented after a
+	// successful stream, a server crash mid-download would let the same one-time
+	// link be consumed twice. Persist atomically so a crash never loses the
+	// increment or leaves a corrupt JSON file.
+	fileInfo.Downloads++
+	if err := writeFileInfoAtomic(infoFilePath, &fileInfo); err != nil {
+		handleError(w, "Error reserving download slot: "+err.Error(), "Error processing file", http.StatusInternalServerError)
+		return
+	}
+
 	// Set headers and write file to response
 	w.Header().Set("Content-Disposition", "attachment; filename="+fileID)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", fileStat.Size()))
 
-	// Stream the file and track if successful
-	streamingSuccessful := true
-	buffer := make([]byte, bufferSize)
-	for {
-		n, err := file.Read(buffer)
-		if err != nil {
-			if err == os.ErrClosed || err == io.EOF {
-				break
-			}
-			// If there's an error reading the file, mark streaming as failed
-			streamingSuccessful = false
-			handleError(w, "Error reading file: "+err.Error(), "Error processing file", http.StatusInternalServerError)
-			return
-		}
-		if n > 0 {
-			_, writeErr := w.Write(buffer[:n])
-			if writeErr != nil {
-				// If there's an error writing to the response, mark streaming as failed
-				streamingSuccessful = false
-				log.Printf("Error writing to response: %v", writeErr)
-				return
-			}
-			if f, ok := w.(http.Flusher); ok {
-				f.Flush()
-			}
-		}
+	// Stream the file. We've already reserved the slot, so once the first byte
+	// is written the headers are committed and we must NOT call http.Error
+	// afterwards (that would produce a "superfluous WriteHeader" warning and a
+	// corrupted response body).
+	if _, err := io.CopyBuffer(w, file, make([]byte, bufferSize)); err != nil {
+		// Client disconnect or disk read error — body is partially sent, just
+		// log and return; the slot stays consumed.
+		log.Printf("Streaming error for %s: %v", fileID, err)
+		return
+	}
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
 	}
 
-	// Only increment download count if streaming was successful
-	if streamingSuccessful {
-		fileInfo.Downloads++
-		// Update file info with new download count
-		infoFile, err = os.Create(infoFilePath)
-		if err != nil {
-			// Log error but don't fail the response since file was already sent
-			log.Printf("Warning: Error updating download count for %s: %v", fileID, err)
-		} else {
-			json.NewEncoder(infoFile).Encode(&fileInfo)
-			infoFile.Close()
-		}
-
-		// Delete file if it's a one-time download or reached max downloads
-		if fileInfo.OneTimeDownload || (fileInfo.MaxDownloads > 0 && fileInfo.Downloads >= fileInfo.MaxDownloads) {
-			deleteFileAndMetadata(filePath, infoFilePath)
-			fmt.Println("Deleted file:", fileID)
-		}
+	// Delete file if it's a one-time download or reached max downloads
+	if fileInfo.OneTimeDownload || (fileInfo.MaxDownloads > 0 && fileInfo.Downloads >= fileInfo.MaxDownloads) {
+		deleteFileAndMetadata(filePath, infoFilePath)
+		log.Printf("Deleted file after final download: %s", fileID)
 	}
+}
+
+// writeFileInfoAtomic writes the FileInfo JSON atomically via temp file + rename,
+// so a crash or concurrent reader never observes a partially-written file.
+func writeFileInfoAtomic(infoFilePath string, fileInfo *FileInfo) error {
+	dir := filepath.Dir(infoFilePath)
+	tmp, err := os.CreateTemp(dir, ".info-*.tmp")
+	if err != nil {
+		return fmt.Errorf("create temp info file: %w", err)
+	}
+	tmpName := tmp.Name()
+	encErr := json.NewEncoder(tmp).Encode(fileInfo)
+	syncErr := tmp.Sync()
+	closeErr := tmp.Close()
+	if encErr != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("encode info file: %w", encErr)
+	}
+	if syncErr != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("sync info file: %w", syncErr)
+	}
+	if closeErr != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("close info file: %w", closeErr)
+	}
+	if err := os.Rename(tmpName, infoFilePath); err != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("rename info file: %w", err)
+	}
+	return nil
 }
 
 // deleteOldFiles scans the uploads directory and deletes expired files
@@ -804,19 +838,18 @@ func deleteOldFiles() {
 	}
 }
 
-// deleteFileAndMetadata deletes a file and its associated metadata file
+// deleteFileAndMetadata deletes a file and its associated metadata file.
+// The per-file mutex entry is cleaned up automatically by releaseFileMutex
+// once every holder has released it — no explicit cleanup needed here.
 func deleteFileAndMetadata(filePath, infoFilePath string) {
-	// Attempt to delete the file
-	if err := os.Remove(filePath); err != nil {
-		fmt.Println("Error deleting file:", filePath, err)
+	// Attempt to delete the file; ignore ErrNotExist (idempotent cleanup).
+	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+		log.Printf("Error deleting file %s: %v", filePath, err)
 	}
-	// Attempt to delete the metadata file
-	if err := os.Remove(infoFilePath); err != nil {
-		fmt.Println("Error deleting metadata file:", infoFilePath, err)
+	// Attempt to delete the metadata file.
+	if err := os.Remove(infoFilePath); err != nil && !os.IsNotExist(err) {
+		log.Printf("Error deleting metadata file %s: %v", infoFilePath, err)
 	}
-	// Clean up the file mutex now that the file is gone
-	fileID := filepath.Base(filePath)
-	cleanupFileMutex(fileID)
 }
 
 // ReadConfig reads the configuration file and populates the AppConfig struct
