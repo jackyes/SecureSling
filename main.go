@@ -547,12 +547,11 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			tempFilePath = tempFile.Name() // Keep track of the file path
-			defer tempFile.Close()
 
 			// Copy the file data from the part to the temporary file
 			_, err = io.Copy(tempFile, part)
+			tempFile.Close()
 			if err != nil {
-				tempFile.Close()
 				os.Remove(tempFilePath) // Clean up the temp file on error
 				handleError(w, "Error writing to temporary file: "+err.Error(), "Error processing file", http.StatusInternalServerError)
 				return
@@ -571,7 +570,6 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 			expiryDate, err = time.Parse("2006-01-02", buf.String())
 			if err != nil {
 				if tempFile != nil {
-					tempFile.Close()
 					os.Remove(tempFilePath)
 				}
 				handleError(w, "Invalid date format: "+buf.String(), "Invalid date format. Use YYYY-MM-DD.", http.StatusBadRequest)
@@ -584,7 +582,6 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 			maxDownloads, err = strconv.Atoi(buf.String())
 			if err != nil {
 				if tempFile != nil {
-					tempFile.Close()
 					os.Remove(tempFilePath)
 				}
 				handleError(w, "Invalid max downloads value: "+buf.String(), "Invalid max downloads value", http.StatusBadRequest)
@@ -601,7 +598,6 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 
 	// Validate input data
 	if err := validateInput(oneTimeDownload, expiryDate, maxDownloads); err != nil {
-		tempFile.Close()
 		os.Remove(tempFilePath) // Clean up the temp file on error
 		handleError(w, "Validation error: "+err.Error(), err.Error(), http.StatusBadRequest)
 		return
@@ -609,7 +605,7 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 
 	// Create a FileInfo struct to store file information
 	fileInfo := FileInfo{
-		FileID:          filepath.Base(tempFile.Name()),
+		FileID:          filepath.Base(tempFilePath),
 		Timestamp:       time.Now(),
 		OneTimeDownload: oneTimeDownload,
 		ExpiryDate:      expiryDate,
@@ -620,7 +616,6 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 	// Save file info to JSON atomically (temp file + rename).
 	infoFilePath := filepath.Join(AppConfig.UploadDir, fileInfo.FileID+".json")
 	if err := writeFileInfoAtomic(infoFilePath, &fileInfo); err != nil {
-		tempFile.Close()
 		os.Remove(tempFilePath) // Clean up the temp file on error
 		handleError(w, "Error writing info file: "+err.Error(), "Error processing file", http.StatusInternalServerError)
 		return
@@ -629,7 +624,6 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 	// Send response with file info
 	jsonResponse, err := json.Marshal(fileInfo)
 	if err != nil {
-		tempFile.Close()
 		os.Remove(tempFilePath) // Clean up the temp file on error
 		os.Remove(infoFilePath) // Clean up the JSON file on error
 		handleError(w, "Error creating JSON response: "+err.Error(), "Error processing file", http.StatusInternalServerError)
@@ -743,8 +737,14 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 	// afterwards (that would produce a "superfluous WriteHeader" warning and a
 	// corrupted response body).
 	if _, err := io.CopyBuffer(w, file, make([]byte, bufferSize)); err != nil {
-		// Client disconnect or disk read error — body is partially sent, just
-		// log and return; the slot stays consumed.
+		// Client disconnect or disk read error — roll back the download slot
+		// so the file remains available for retry. Server-crash protection is
+		// preserved: if we crash before this rollback, the slot stays consumed
+		// (which is the safe direction for one-time downloads).
+		fileInfo.Downloads--
+		if writeErr := writeFileInfoAtomic(infoFilePath, &fileInfo); writeErr != nil {
+			log.Printf("Error rolling back download slot for %s: %v", fileID, writeErr)
+		}
 		log.Printf("Streaming error for %s: %v", fileID, err)
 		return
 	}
@@ -823,8 +823,15 @@ func deleteOldFiles() {
 
 			// Check if the file has expired
 			if time.Now().After(fileInfo.ExpiryDate) {
+				// Acquire the per-file mutex to avoid racing with an
+				// in-progress download (which holds the same mutex
+				// while reading/writing metadata and streaming).
+				entry := acquireFileMutex(fileInfo.FileID)
+				entry.mu.Lock()
 				filePath := filepath.Join(AppConfig.UploadDir, fileInfo.FileID)
 				deleteFileAndMetadata(filePath, infoFilePath)
+				entry.mu.Unlock()
+				releaseFileMutex(fileInfo.FileID, entry)
 				fmt.Println("Deleted expired file:", fileInfo.FileID)
 
 				// Process in batches to avoid overwhelming the system
