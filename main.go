@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"bytes"
@@ -27,8 +27,9 @@ import (
 )
 
 const (
-	bufferSize      = 16 * 1024 * 1024 // 16MB buffer size (optimized for modern systems)
-	maxFileIDLength = 100
+	bufferSize       = 16 * 1024 // 16KB streaming buffer (reduced from 16MB)
+	maxFileIDLength  = 100
+	maxFormFieldSize = 1 << 20 // 1MB limit for text form fields
 )
 
 type rateLimiterEntry struct {
@@ -46,7 +47,8 @@ type fileMutexEntry struct {
 var (
 	AppConfig    Cfg
 	rlMu         sync.RWMutex
-	rateLimiters = make(map[string]*rateLimiterEntry)
+	rateLimiters   = make(map[string]*rateLimiterEntry)
+	uploadLimiters = make(map[string]*rateLimiterEntry)
 	// Template caching for better performance
 	uploadTemplate   *template.Template
 	downloadTemplate *template.Template
@@ -55,7 +57,19 @@ var (
 	fileMutexesMu sync.Mutex
 	// Pre-compiled regex for file ID validation
 	validFileIDRegex = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+	// Pre-computed dummy hash for bcrypt timing normalization
+	dummyBcryptHash  string
+	cachedCredentials []UserCredentials
+	credentialsOnce   sync.Once
 )
+
+func init() {
+	hash, err := bcrypt.GenerateFromPassword([]byte("dummy-timing-normalizer"), bcrypt.DefaultCost)
+	if err != nil {
+		panic(err)
+	}
+	dummyBcryptHash = string(hash)
+}
 
 type UserCredentials struct {
 	Username string `yaml:"username"`
@@ -142,6 +156,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("X-XSS-Protection", "1; mode=block")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' https://cdnjs.cloudflare.com https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data:; frame-ancestors 'none'")
 
 		// Only set HSTS if TLS is enabled
 		if AppConfig.EnableTLS {
@@ -187,6 +202,9 @@ func cacheMiddleware(next http.Handler) http.Handler {
 // Validate file ID to prevent path traversal attacks
 func isValidFileID(fileID string) bool {
 	if fileID == "" || len(fileID) > maxFileIDLength {
+		return false
+	}
+	if strings.Contains(fileID, "..") || fileID == "." {
 		return false
 	}
 	return validFileIDRegex.MatchString(fileID)
@@ -283,7 +301,7 @@ func basicAuth(next http.HandlerFunc) http.HandlerFunc {
 			}
 			rlMu.Unlock()
 		}
-		// Always refresh lastSeen with atomic store — safe under RLock.
+		// Always refresh lastSeen with atomic store â€” safe under RLock.
 		entry.lastSeen.Store(time.Now().UnixNano())
 
 		// Consume a token from the rate limiter
@@ -329,27 +347,72 @@ func basicAuth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// validateCredentials checks if the provided username and password are valid
+// uploadRateLimiter is middleware that rate-limits upload requests by client IP.
+// This runs independently of EnablePassword so that unauthenticated deployments
+// still have upload-rate protection.
+func uploadRateLimiter(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ip := getClientIP(r)
+
+		rlMu.RLock()
+		entry, ok := uploadLimiters[ip]
+		rlMu.RUnlock()
+
+		if !ok {
+			limiter := rate.NewLimiter(rate.Every(6*time.Second), 10)
+			entry = &rateLimiterEntry{limiter: limiter}
+			entry.lastSeen.Store(time.Now().UnixNano())
+
+			rlMu.Lock()
+			if existingEntry, exists := uploadLimiters[ip]; exists {
+				entry = existingEntry
+			} else {
+				uploadLimiters[ip] = entry
+			}
+			rlMu.Unlock()
+		}
+		entry.lastSeen.Store(time.Now().UnixNano())
+
+		if !entry.limiter.Allow() {
+			http.Error(w, "Too many requests", http.StatusTooManyRequests)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	}
+}
+
+// ensureCredentialsLoaded loads user credentials once at startup.
+// This avoids per-request file I/O and any associated TOCTOU window.
+func ensureCredentialsLoaded() {
+	credentialsOnce.Do(func() {
+		credentialsPath := "config/credentials.yaml"
+		if _, err := os.Stat(credentialsPath); os.IsNotExist(err) {
+			credentialsPath = "credentials.yaml"
+		}
+		var err error
+		cachedCredentials, err = readUserCredentials(credentialsPath)
+		if err != nil {
+			log.Printf("Error reading credentials file at startup: %v", err)
+		}
+	})
+}
+
+// validateCredentials checks if the provided username and password are valid.
+// Uses cached credentials and always performs exactly one bcrypt comparison
+// to prevent timing side-channel user enumeration.
 func validateCredentials(username, password string) bool {
-	credentialsPath := "config/credentials.yaml"
-	if _, err := os.Stat(credentialsPath); os.IsNotExist(err) {
-		credentialsPath = "credentials.yaml"
-	}
-
-	credentials, err := readUserCredentials(credentialsPath)
-	if err != nil {
-		log.Printf("Error reading credentials file: %v", err)
-		return false
-	}
-
-	for _, cred := range credentials {
+	// Default to dummy hash for timing normalization
+	hashToCompare := dummyBcryptHash
+	for _, cred := range cachedCredentials {
 		if cred.Username == username {
-			err := bcrypt.CompareHashAndPassword([]byte(cred.Password), []byte(password))
-			return err == nil
+			hashToCompare = cred.Password
+			break
 		}
 	}
 
-	return false
+	// Always perform exactly one bcrypt comparison, normalizing timing
+	return bcrypt.CompareHashAndPassword([]byte(hashToCompare), []byte(password)) == nil
 }
 
 // formatDuration formats a duration in hours into a human-readable string
@@ -388,7 +451,7 @@ func formatDuration(hours int) string {
 // associated with fileID. The caller MUST pair this with releaseFileMutex to
 // avoid leaking entries. Reference counting prevents the race where an entry
 // is deleted while another goroutine still holds a pointer to it and a third
-// goroutine later creates a fresh entry under the same fileID — which would
+// goroutine later creates a fresh entry under the same fileID â€” which would
 // allow concurrent writers on the same underlying file.
 func acquireFileMutex(fileID string) *fileMutexEntry {
 	fileMutexesMu.Lock()
@@ -426,6 +489,12 @@ func cleanupRateLimiters() {
 		lastSeen := time.Unix(0, entry.lastSeen.Load())
 		if now.Sub(lastSeen) > maxAge {
 			delete(rateLimiters, ip)
+		}
+	}
+	for ip, entry := range uploadLimiters {
+		lastSeen := time.Unix(0, entry.lastSeen.Load())
+		if now.Sub(lastSeen) > maxAge {
+			delete(uploadLimiters, ip)
 		}
 	}
 }
@@ -506,6 +575,19 @@ func validateInput(oneTimeDownload bool, expiryDate time.Time, maxDownloads int)
 // uploadFile handles the file upload process
 func uploadFile(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Starting file upload")
+
+	// Check available disk space before accepting upload
+	freeSpace, err := getAvailableDiskSpace(AppConfig.UploadDir)
+	if err != nil {
+		handleError(w, "Error checking disk space: "+err.Error(), "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	const headroom uint64 = 10 * 1024 * 1024 * 1024 // 10GB headroom
+	if freeSpace < uint64(AppConfig.MaxUploadSize)+headroom {
+		handleError(w, "Insufficient disk space", "Service temporarily unavailable", http.StatusInsufficientStorage)
+		return
+	}
+
 	// Limit file size to AppConfig.MaxUploadSize
 	r.Body = http.MaxBytesReader(w, r.Body, AppConfig.MaxUploadSize)
 
@@ -550,7 +632,9 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 
 			// Copy the file data from the part to the temporary file
 			_, err = io.Copy(tempFile, part)
-			tempFile.Close()
+			if closeErr := tempFile.Close(); closeErr != nil && err == nil {
+				err = closeErr
+			}
 			if err != nil {
 				os.Remove(tempFilePath) // Clean up the temp file on error
 				handleError(w, "Error writing to temporary file: "+err.Error(), "Error processing file", http.StatusInternalServerError)
@@ -561,30 +645,30 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 		} else if part.FormName() == "oneTimeDownload" {
 			// Read the one-time download flag from the part
 			buf := new(bytes.Buffer)
-			buf.ReadFrom(part)
+			buf.ReadFrom(io.LimitReader(part, maxFormFieldSize))
 			oneTimeDownload = buf.String() == "true"
 		} else if part.FormName() == "expiryDate" {
 			// Read the expiry date from the part
 			buf := new(bytes.Buffer)
-			buf.ReadFrom(part)
+			buf.ReadFrom(io.LimitReader(part, maxFormFieldSize))
 			expiryDate, err = time.Parse("2006-01-02", buf.String())
 			if err != nil {
 				if tempFile != nil {
 					os.Remove(tempFilePath)
 				}
-				handleError(w, "Invalid date format: "+buf.String(), "Invalid date format. Use YYYY-MM-DD.", http.StatusBadRequest)
+				handleError(w, fmt.Sprintf("Invalid date format: %q", buf.String()), "Invalid date format. Use YYYY-MM-DD.", http.StatusBadRequest)
 				return
 			}
 		} else if part.FormName() == "maxDownloads" {
 			// Read the maximum downloads value from the part
 			buf := new(bytes.Buffer)
-			buf.ReadFrom(part)
+			buf.ReadFrom(io.LimitReader(part, maxFormFieldSize))
 			maxDownloads, err = strconv.Atoi(buf.String())
 			if err != nil {
 				if tempFile != nil {
 					os.Remove(tempFilePath)
 				}
-				handleError(w, "Invalid max downloads value: "+buf.String(), "Invalid max downloads value", http.StatusBadRequest)
+				handleError(w, fmt.Sprintf("Invalid max downloads value: %q", buf.String()), "Invalid max downloads value", http.StatusBadRequest)
 				return
 			}
 		}
@@ -707,7 +791,14 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 		handleError(w, "File not found: "+filePath, "File not found", http.StatusNotFound)
 		return
 	}
-	defer file.Close()
+	// Use a named return convention via a flag so we can close the file before
+	// deleting it on Windows (where open files cannot be removed).
+	closeFile := true
+	defer func() {
+		if closeFile {
+			file.Close()
+		}
+	}()
 
 	// Get file stats to set response headers
 	fileStat, err := file.Stat()
@@ -736,8 +827,8 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 	// is written the headers are committed and we must NOT call http.Error
 	// afterwards (that would produce a "superfluous WriteHeader" warning and a
 	// corrupted response body).
-	if _, err := io.CopyBuffer(w, file, make([]byte, bufferSize)); err != nil {
-		// Client disconnect or disk read error — roll back the download slot
+	if _, err := io.Copy(w, file); err != nil {
+		// Client disconnect or disk read error â€” roll back the download slot
 		// so the file remains available for retry. Server-crash protection is
 		// preserved: if we crash before this rollback, the slot stays consumed
 		// (which is the safe direction for one-time downloads).
@@ -752,9 +843,19 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 		f.Flush()
 	}
 
-	// Delete file if it's a one-time download or reached max downloads
+	// Delete file if it's a one-time download or reached max downloads.
+	// Close the file handle first so deletion works on Windows.
+	closeFile = false
+	file.Close()
 	if fileInfo.OneTimeDownload || (fileInfo.MaxDownloads > 0 && fileInfo.Downloads >= fileInfo.MaxDownloads) {
-		deleteFileAndMetadata(filePath, infoFilePath)
+		// Only delete the encrypted file â€” keep the metadata so that
+		// concurrent or subsequent requests see the updated download
+		// count and receive a proper 410 Gone instead of a confusing
+		// 404 Not Found. Stale metadata is cleaned up by deleteOldFiles
+		// when the expiry date passes.
+		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+			log.Printf("Error deleting file %s: %v", filePath, err)
+		}
 		log.Printf("Deleted file after final download: %s", fileID)
 	}
 }
@@ -847,7 +948,7 @@ func deleteOldFiles() {
 
 // deleteFileAndMetadata deletes a file and its associated metadata file.
 // The per-file mutex entry is cleaned up automatically by releaseFileMutex
-// once every holder has released it — no explicit cleanup needed here.
+// once every holder has released it â€” no explicit cleanup needed here.
 func deleteFileAndMetadata(filePath, infoFilePath string) {
 	// Attempt to delete the file; ignore ErrNotExist (idempotent cleanup).
 	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
@@ -954,7 +1055,7 @@ func main() {
 
 	// Ensure the upload directory exists
 	if _, err := os.Stat(AppConfig.UploadDir); os.IsNotExist(err) {
-		err := os.MkdirAll(AppConfig.UploadDir, os.ModePerm)
+		err := os.MkdirAll(AppConfig.UploadDir, 0700)
 		if err != nil {
 			fmt.Printf("Error creating upload directory: %v\n", err)
 			return
@@ -967,7 +1068,7 @@ func main() {
 	// Define routes for file upload and download
 	// -----------------------------
 	// Upload routes
-	r.HandleFunc("/upload", basicAuth(uploadFile)).Methods("POST")
+	r.HandleFunc("/upload", uploadRateLimiter(basicAuth(uploadFile))).Methods("POST")
 	r.HandleFunc("/upload.html", basicAuth(serveUploadPage)).Methods("GET")
 
 	r.HandleFunc("/download.html", serveDownloadPage).Methods("GET")
@@ -975,7 +1076,7 @@ func main() {
 	r.HandleFunc("/share/download.html", serveDownloadPage).Methods("GET")
 
 	// Share upload routes (same as above, but with /share prefix)
-	r.HandleFunc("/share/upload", basicAuth(uploadFile)).Methods("POST")
+	r.HandleFunc("/share/upload", uploadRateLimiter(basicAuth(uploadFile))).Methods("POST")
 	r.HandleFunc("/share/upload.html", basicAuth(serveUploadPage)).Methods("GET")
 
 	// Download route
@@ -1022,6 +1123,17 @@ func main() {
 	fmt.Println("Starting server on port " + AppConfig.ServerPort)
 	if AppConfig.EnableTLS {
 		fmt.Println("HTTPS enabled")
+		// Validate certificate file existence before starting
+		if _, err := os.Stat(AppConfig.CertPathCrt); os.IsNotExist(err) {
+			fmt.Printf("ERROR: TLS is enabled but certificate file not found: %s\n", AppConfig.CertPathCrt)
+			fmt.Println("Set EnableTLS: false in config.yaml, or configure valid CertPathCrt and CertPathKey paths.")
+			return
+		}
+		if _, err := os.Stat(AppConfig.CertPathKey); os.IsNotExist(err) {
+			fmt.Printf("ERROR: TLS is enabled but key file not found: %s\n", AppConfig.CertPathKey)
+			fmt.Println("Set EnableTLS: false in config.yaml, or configure valid CertPathCrt and CertPathKey paths.")
+			return
+		}
 		// Start the server with TLS enabled
 		if err := srv.ListenAndServeTLS(AppConfig.CertPathCrt, AppConfig.CertPathKey); err != nil {
 			fmt.Println("Server error:", err)
@@ -1034,3 +1146,7 @@ func main() {
 		}
 	}
 }
+
+
+
+

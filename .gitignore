@@ -1,0 +1,11 @@
+# Build output
+SecureSling.exe
+SecureSling
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

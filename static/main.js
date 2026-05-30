@@ -1,23 +1,11 @@
 // Performance-optimized constants
-const PBKDF2_ITERATIONS = 100000;
+const PBKDF2_ITERATIONS = 600000;
 const AES_KEY_LENGTH = 256;
 const SALT_LENGTH = 16;
 const PROGRESS_UPDATE_INTERVAL = 100; // ms
-const MAX_FILE_SIZE_DISPLAY = 1024 * 1024 * 1024; // 1GB for display optimization
+// 500 MB client-side size limit to prevent OOM from file.arrayBuffer()
+const MAX_FILE_SIZE_CLIENT = 500 * 1024 * 1024;
 
-// Pre-compiled regex patterns for optimized input validation
-const validationPatterns = {
-    htmlEntities: /[&<>"']/g,
-    filenameInvalid: /[<>:"/\\|?*\x00-\x1F]/g,
-    numbersOnly: /^\d+$/,
-    entityMap: new Map([
-        ['&', '&'],
-        ['<', '<'],
-        ['>', '>'],
-        ['"', '"'],
-        ["'", '&#39;']
-    ])
-};
 
 // Function to encrypt a file with performance optimizations
 async function encryptFile(file) {
@@ -67,9 +55,8 @@ async function encryptFile(file) {
         
         return { encryptedContent, key, iv };
     } catch (error) {
-        //console.error("Error during encryption:", error);
-        //displayError("An error occurred during encryption.");
-        return null;
+        console.error("Error during encryption:", error);
+        throw error;
     } finally {
         // Resources are automatically cleaned up by garbage collection
         // No manual cleanup needed for file objects
@@ -95,7 +82,7 @@ async function importKey(keyArray) {
         return await crypto.subtle.importKey("raw", key, { name: "AES-GCM" }, true, ["decrypt"]);
     } catch (error) {
         console.error("Error importing key:", error);
-        displayError("An error occurred while importing the key.");
+        displayError('Decryption failed: the file may be corrupted or the password is incorrect.');
         return null;
     }
 }
@@ -250,7 +237,6 @@ function showLoadingState(element, text = 'Loading...') {
             element.disabled = false;
             element.removeAttribute('aria-disabled');
             element.innerHTML = originalHtml;
-            element.textContent = originalText;
         }
     };
 }
@@ -330,6 +316,12 @@ async function uploadFile() {
     try {
         // Encrypt the file (or zip)
         statusMessage.textContent = 'Encrypting your file securely...';
+
+        // Client-side file size gate to prevent OOM
+        if (fileToEncrypt.size > MAX_FILE_SIZE_CLIENT) {
+            throw new Error('File too large. Maximum file size is ' + (MAX_FILE_SIZE_CLIENT / (1024 * 1024)) + ' MB.');
+        }
+
         const formData = new FormData();
         let encryptedContent, key, iv, salt;
 
@@ -489,18 +481,19 @@ async function uploadFile() {
             console.error("Error uploading file:", error);
             displayError("An error occurred while uploading the file.");
             isUploading = false;
-            uploadButton.disabled = false;
-            selectFileButton.disabled = false;
+            uploadLoading.restore();
+            selectLoading.restore();
         }
     } catch (error) {
-        displayError(`Error: ${error.message}`);
+        console.error("Upload encryption error:", error);
+        displayError("An error occurred while encrypting the file. Please try again.");
         progressContainer.classList.add('d-none');
         statusMessage.removeAttribute('aria-busy');
-    } finally {
-        // Always restore state regardless of success or failure
         isUploading = false;
         uploadLoading.restore();
         selectLoading.restore();
+    } finally {
+        // isUploading is reset in the appropriate success/error handlers
     }
 }
 
@@ -563,14 +556,8 @@ async function encryptFileWithPassword(file, password) {
         );
         return { encryptedContent, key, iv, salt };
     } catch (err) {
-        if (err instanceof DOMException) {
-            console.error('DOMException during encryption:', err);
-            displayError("An error occurred while encrypting the file with password.");
-        } else {
-            console.error('Error during encryption:', err);
-            displayError("An error occurred while encrypting the file with password.");
-        }
-        return null;
+        console.error('Error during encryption:', err);
+        throw err;
     }
 }
 
@@ -943,6 +930,9 @@ async function downloadFile() {
         fileID = hashParams.get('fileID');
         salt = hashParams.has('salt') ? base64UrlDecode(hashParams.get('salt')) : null;
         key = hashParams.has('key') ? JSON.parse(atob(hashParams.get('key'))) : null;
+        if (key !== null && (!Array.isArray(key) || key.length !== 32)) {
+            throw new Error("Invalid key format");
+        }
         iv = base64UrlDecode(hashParams.get('iv'));
         filename = decodeURIComponent(hashParams.get('filename'));
     } catch (error) {
@@ -1127,8 +1117,12 @@ async function startFileDownload(fileID, decryptionKey, iv, filename, statusMess
                     
                     // Use requestIdleCallback for decryption to avoid blocking UI
                     if ('requestIdleCallback' in window) {
-                        requestIdleCallback(async () => {
-                            await processDownloadedFile(encryptedContent, decryptionKey, iv, filename, fileID, statusMessage, progressContainer, downloadLoading);
+                        requestIdleCallback(() => {
+                            processDownloadedFile(encryptedContent, decryptionKey, iv, filename, fileID, statusMessage, progressContainer, downloadLoading)
+                                .catch(error => {
+                                    console.error('Error during decryption or file processing:', error);
+                                    handleDownloadError(0, 'An error occurred during file decryption or processing.', progressContainer, statusMessage, downloadLoading);
+                                });
                         }, { timeout: 500 });
                     } else {
                         await processDownloadedFile(encryptedContent, decryptionKey, iv, filename, fileID, statusMessage, progressContainer, downloadLoading);
@@ -1214,6 +1208,7 @@ async function processDownloadedFile(encryptedContent, decryptionKey, iv, filena
                             downloadLink.download = downloadName;
                             downloadLink.className = 'btn btn-sm btn-outline-primary archive-file-download';
                             downloadLink.innerHTML = '<i class="fas fa-download"></i> Download';
+                            downloadLink.addEventListener('click', () => { setTimeout(() => { URL.revokeObjectURL(url); }, 2000); });
                             fileItem.appendChild(downloadLink);
 
                             fileList.appendChild(fileItem);
@@ -1245,7 +1240,7 @@ async function processDownloadedFile(encryptedContent, decryptionKey, iv, filena
                 a.href = url;
                 a.download = filename || 'decrypted_archive.zip';
                 a.click();
-                setTimeout(() => { URL.revokeObjectURL(url); }, 100);
+                setTimeout(() => { URL.revokeObjectURL(url); }, 2000);
                 displaySuccess('Complete archive downloaded successfully!');
             });
 
@@ -1258,7 +1253,7 @@ async function processDownloadedFile(encryptedContent, decryptionKey, iv, filena
             a.href = url;
             a.download = filename || 'decrypted_' + fileID;
             a.click();
-            setTimeout(() => { URL.revokeObjectURL(url); }, 100);
+            setTimeout(() => { URL.revokeObjectURL(url); }, 2000);
             statusMessage.textContent = 'File downloaded and decrypted successfully!';
             progressContainer.classList.add('d-none');
             displaySuccess('File downloaded successfully!');
@@ -1376,7 +1371,6 @@ async function decryptFile(encryptedContent, key, iv) {
 
         if (!decryptedContent) {
             console.error("Decryption returned null or undefined content.");
-            displayError("Decryption failed: The decrypted content is invalid.");
             throw new Error("Decryption failed: The decrypted content is invalid.");
         }
 
@@ -1386,16 +1380,7 @@ async function decryptFile(encryptedContent, key, iv) {
         let errorMessage = "An error occurred during decryption.";
 
         if (error instanceof DOMException) {
-            switch (error.name) {
-                case "InvalidAccessError":
-                    errorMessage = "Decryption failed: Invalid key or IV.";
-                    break;
-                case "OperationError":
-                    errorMessage = "Decryption failed: Data integrity check failed (invalid password or corrupted data).";
-                    break;
-                default:
-                    errorMessage = `Decryption failed: ${error.message}`;
-            }
+            errorMessage = 'Decryption failed: the file may be corrupted or the password is incorrect.';
         }
 
         displayError(errorMessage);
@@ -1404,41 +1389,6 @@ async function decryptFile(encryptedContent, key, iv) {
 }
 
 
-// Function to validate and sanitize input
-function validateInput(input, type = 'text') {
-    if (typeof input !== 'string') {
-        throw new Error('Input must be a string');
-    }
-
-    // Trim whitespace
-    input = input.trim();
-
-    switch (type) {
-        case 'text':
-            // Use pre-compiled patterns for better performance
-            return input.replace(validationPatterns.htmlEntities, function (m) {
-                return validationPatterns.entityMap.get(m) || m;
-            });
-        case 'filename':
-            // Use pre-compiled pattern for filename validation
-            return input.replace(validationPatterns.filenameInvalid, '');
-        case 'number':
-            // Use pre-compiled pattern for number validation
-            if (!validationPatterns.numbersOnly.test(input)) {
-                throw new Error('Input must be a valid number');
-            }
-            return input;
-        case 'date':
-            // Ensure the input is a valid date
-            const date = new Date(input);
-            if (isNaN(date.getTime())) {
-                throw new Error('Input must be a valid date');
-            }
-            return date.toISOString().split('T')[0]; // Return YYYY-MM-DD format
-        default:
-            throw new Error('Invalid input type specified');
-    }
-}
 
 // Single optimized DOMContentLoaded event listener
 document.addEventListener("DOMContentLoaded", () => {
